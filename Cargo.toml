@@ -2,5 +2,18 @@
 name = "foc"
 version = "0.1.0"
 edition = "2021"
+authors = ["Caleb Fletcher <caleb@fletcher.cf>"]
+description = "An implementation of various Field Oriented Control algorithms."
+repository = "https://github.com/calebfletcher/foc/"
+homepage = "https://github.com/calebfletcher/foc/"
+license = "MIT OR Apache-2.0"
+keywords = ["foc", "field oriented control", "bldc", "motor", "vector control"]
+categories = [
+    "algorithms",
+    "embedded",
+    "science::robotics",
+    "no-std",
+    "no-std::no-alloc",
+]
 
 [dependencies]
