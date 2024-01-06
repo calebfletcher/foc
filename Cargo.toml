@@ -17,7 +17,8 @@ categories = [
 ]
 
 [dependencies]
-cordic = "0.1.5"
 fixed = "1.24.0"
 nalgebra = { version = "0.32.3", default-features = false }
-simba = { version = "0.8.1", features = ["partial_fixed_point_support"], default-features = false }
+simba = { version = "0.8.1", features = [
+    "partial_fixed_point_support",
+], default-features = false }

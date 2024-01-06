@@ -1,7 +1,7 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
-use nalgebra::Matrix3;
+use nalgebra::{ComplexField, Matrix3};
 use simba::scalar::FixedI16F16;
 
 pub fn clarke() -> Matrix3<FixedI16F16> {
@@ -19,13 +19,17 @@ pub fn clarke() -> Matrix3<FixedI16F16> {
     mat * sqrt_frac_2_3
 }
 
-// pub fn park(theta: f32) -> Matrix3<f32> {
-//     #[rustfmt::skip]
-//     let mat = Matrix3::new(
-//         theta.cos(), -0.5, -0.5,
-//         0., SQRT_3_FRAC_2, 0.,
-//         FRAC_1_SQRT_2, FRAC_1_SQRT_2, FRAC_1_SQRT_2
-//     );
+pub fn park(theta: FixedI16F16) -> Matrix3<FixedI16F16> {
+    #[rustfmt::skip]
+    let mat = Matrix3::new(
+        theta.cos(), theta.sin(), FixedI16F16::from_num(0),
+        -theta.sin(), theta.cos(), FixedI16F16::from_num(0),
+        FixedI16F16::from_num(0), FixedI16F16::from_num(0), FixedI16F16::from_num(1),
+    );
 
-//     mat
-// }
+    mat
+}
+
+pub fn dqz(theta: FixedI16F16) -> Matrix3<FixedI16F16> {
+    park(theta) * clarke()
+}
