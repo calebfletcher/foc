@@ -17,3 +17,4 @@ categories = [
 ]
 
 [dependencies]
+nalgebra = { version = "0.32.3", default-features = false }
