@@ -7,7 +7,7 @@ description = "An implementation of various Field Oriented Control algorithms."
 repository = "https://github.com/calebfletcher/foc/"
 homepage = "https://github.com/calebfletcher/foc/"
 license = "MIT OR Apache-2.0"
-keywords = ["foc", "field oriented control", "bldc", "motor", "vector control"]
+keywords = ["foc", "bldc", "motor", "vector control"]
 categories = [
     "algorithms",
     "embedded",
