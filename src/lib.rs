@@ -61,13 +61,16 @@ impl Foc {
         let v_beta = sin_angle * v_d + cos_angle * v_q;
 
         // Inverse Clark transform
-        // Eq5
-        let v_a = v_alpha;
-        // Eq6
-        let v_b = -(-v_alpha + SQRT_3 * v_beta) / 2;
-        // Eq7
-        let v_c = -(-v_alpha - SQRT_3 * v_beta) / 2;
+        let voltages =
+            park_clarke::inverse_clarke(park_clarke::TwoPhaseStationaryOrthogonalReferenceFrame {
+                alpha: v_alpha,
+                beta: v_beta,
+            });
 
-        [v_a, v_b, v_c]
+        [
+            voltages.a,
+            voltages.b,
+            voltages.c.expect("inverse clarke filled out third value"),
+        ]
     }
 }

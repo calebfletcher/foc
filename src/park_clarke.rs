@@ -2,7 +2,7 @@
 //!
 //! The algorithms implemented here are based on [Microsemi's suggested implementation](https://www.microsemi.com/document-portal/doc_view/132799-park-inverse-park-and-clarke-inverse-clarke-transformations-mss-software-implementation-user-guide)
 
-use super::FRAC_1_SQRT_3;
+use crate::{FRAC_1_SQRT_3, SQRT_3};
 
 use fixed::types::I16F16;
 
@@ -40,5 +40,18 @@ pub fn clarke(
             // Eq4
             beta: FRAC_1_SQRT_3 * (inputs.a + 2 * inputs.b),
         }
+    }
+}
+
+pub fn inverse_clarke(
+    inputs: TwoPhaseStationaryOrthogonalReferenceFrame,
+) -> ThreePhaseStationaryReferenceFrame {
+    ThreePhaseStationaryReferenceFrame {
+        // Eq5
+        a: inputs.alpha,
+        // Eq6
+        b: (-inputs.alpha + SQRT_3 * inputs.beta) / 2,
+        // Eq7
+        c: Some((-inputs.alpha - SQRT_3 * inputs.beta) / 2),
     }
 }
