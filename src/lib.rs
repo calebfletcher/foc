@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 #![forbid(unsafe_code)]
 
 use fixed::types::I16F16;

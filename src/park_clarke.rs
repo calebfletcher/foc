@@ -6,16 +6,19 @@ use crate::{FRAC_1_SQRT_3, SQRT_3};
 
 use fixed::types::I16F16;
 
+#[derive(Debug, Clone)]
 pub struct MovingReferenceFrame {
     pub d: I16F16,
     pub q: I16F16,
 }
 
+#[derive(Debug, Clone)]
 pub struct TwoPhaseStationaryOrthogonalReferenceFrame {
     pub alpha: I16F16,
     pub beta: I16F16,
 }
 
+#[derive(Debug, Clone)]
 pub struct ThreePhaseStationaryReferenceFrame {
     pub a: I16F16,
     pub b: I16F16,
@@ -30,12 +33,13 @@ pub fn clarke(
     inputs: ThreePhaseStationaryReferenceFrame,
 ) -> TwoPhaseStationaryOrthogonalReferenceFrame {
     if let Some(c) = inputs.c {
-        TwoPhaseStationaryOrthogonalReferenceFrame {
+        let _ = TwoPhaseStationaryOrthogonalReferenceFrame {
             // Eq1
-            alpha: (2 * inputs.a) / 3 + (inputs.b - c) / 3,
+            alpha: (2 * inputs.a) / 3 - (inputs.b - c) / 3,
             // Eq2
             beta: 2 * FRAC_1_SQRT_3 * (inputs.b - c),
-        }
+        };
+        unimplemented!("this isn't giving correct results for some reason");
     } else {
         TwoPhaseStationaryOrthogonalReferenceFrame {
             // Eq3
@@ -91,5 +95,78 @@ pub fn inverse_park(
         alpha: cos_angle * inputs.d - sin_angle * inputs.q,
         // Eq11
         beta: sin_angle * inputs.d + cos_angle * inputs.q,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fixed_macro::types::I16F16;
+
+    #[track_caller]
+    fn clark_e_round_trip(a: f32, b: f32, c: Option<f32>) {
+        let input = ThreePhaseStationaryReferenceFrame {
+            a: I16F16::from_num(a),
+            b: I16F16::from_num(b),
+            c: c.map(I16F16::from_num),
+        };
+        let two_phase = clarke(input.clone());
+        dbg!(&two_phase);
+        let result = inverse_clarke(two_phase);
+
+        dbg!(&result);
+
+        assert!(result.a.abs_diff(input.a) < 0.0001);
+        assert!(result.b.abs_diff(input.b) < 0.0001);
+        if let Some(c) = input.c {
+            assert!(result.c.unwrap().abs_diff(c) < 0.0001);
+        } else {
+            assert!((result.a + result.b + result.c.unwrap()) < 0.0001);
+        }
+    }
+
+    #[test]
+    fn clarke_round_trip_zero() {
+        clark_e_round_trip(0., 0., Some(0.));
+        clark_e_round_trip(0., 0., None);
+    }
+
+    #[test]
+    fn clarke_round_trip_two_inputs() {
+        clark_e_round_trip(0., 1., None);
+        clark_e_round_trip(1., 0., None);
+        clark_e_round_trip(-0.5, -0.5, None);
+        clark_e_round_trip(-0.1, -0.2, None);
+        clark_e_round_trip(13., 21., None);
+
+        // let i_alpha = (2. / 3.) * i_a -
+    }
+
+    #[test]
+    fn clarke_round_trip_three_inputs() {
+        clark_e_round_trip(0., 1., Some(-1.));
+        clark_e_round_trip(1., 0., Some(-1.));
+        clark_e_round_trip(-0.5, -0.5, Some(1.));
+        clark_e_round_trip(-0.1, -0.2, Some(0.3));
+        clark_e_round_trip(13., 21., Some(-34.));
+    }
+
+    #[test]
+    fn park_round_trip() {
+        let angle = I16F16!(0.82);
+        let (sin_angle, cos_angle) = cordic::sin_cos(angle);
+
+        let input = TwoPhaseStationaryOrthogonalReferenceFrame {
+            alpha: I16F16!(2),
+            beta: I16F16!(3),
+        };
+        let moving_reference = park(cos_angle, sin_angle, input.clone());
+        dbg!(&moving_reference);
+        let result = inverse_park(cos_angle, sin_angle, moving_reference);
+
+        dbg!(&result);
+
+        assert!(result.alpha.abs_diff(input.alpha) < 0.001);
+        assert!(result.beta.abs_diff(input.beta) < 0.001);
     }
 }
