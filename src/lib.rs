@@ -4,8 +4,9 @@
 use fixed::types::I16F16;
 use fixed_macro::types::I16F16;
 
-mod park_clarke;
+pub mod park_clarke;
 mod pid;
+pub mod svpwm;
 
 const FRAC_1_SQRT_3: I16F16 = I16F16!(0.57735027);
 const SQRT_3: I16F16 = I16F16!(1.7320508);
