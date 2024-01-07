@@ -39,16 +39,13 @@ impl Foc {
         // Park transform
         let rotating_current = park_clarke::park(cos_angle, sin_angle, orthogonal_current);
 
-        // Error to desired torque & flux currents
-        let (error_i_d, error_i_q) = (-rotating_current.d, desired_torque - rotating_current.q);
-
-        // PI controllers
+        // Current PI controllers
         let v_d = self
             .flux_current_controller
-            .update(error_i_d, I16F16::ZERO, dt);
+            .update(rotating_current.d, I16F16::ZERO, dt);
         let v_q = self
             .torque_current_controller
-            .update(error_i_q, desired_torque, dt);
+            .update(rotating_current.q, desired_torque, dt);
 
         // Inverse Park transform
         let orthogonal_voltage = park_clarke::inverse_park(
