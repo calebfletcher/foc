@@ -6,10 +6,10 @@ use crate::{FRAC_1_SQRT_3, SQRT_3};
 
 use fixed::types::I16F16;
 
-// pub struct MovingReferenceFrame {
-//     pub d: I16F16,
-//     pub q: I16F16,
-// }
+pub struct MovingReferenceFrame {
+    pub d: I16F16,
+    pub q: I16F16,
+}
 
 pub struct TwoPhaseStationaryOrthogonalReferenceFrame {
     pub alpha: I16F16,
@@ -23,6 +23,9 @@ pub struct ThreePhaseStationaryReferenceFrame {
     pub c: Option<I16F16>,
 }
 
+/// Clarke transform
+///
+/// Implements equations 1-4 from the Microsemi guide.
 pub fn clarke(
     inputs: ThreePhaseStationaryReferenceFrame,
 ) -> TwoPhaseStationaryOrthogonalReferenceFrame {
@@ -43,6 +46,9 @@ pub fn clarke(
     }
 }
 
+/// Inverse Clarke transform
+///
+/// Implements equations 5-7 from the Microsemi guide.
 pub fn inverse_clarke(
     inputs: TwoPhaseStationaryOrthogonalReferenceFrame,
 ) -> ThreePhaseStationaryReferenceFrame {
@@ -53,5 +59,37 @@ pub fn inverse_clarke(
         b: (-inputs.alpha + SQRT_3 * inputs.beta) / 2,
         // Eq7
         c: Some((-inputs.alpha - SQRT_3 * inputs.beta) / 2),
+    }
+}
+
+/// Park transform
+///
+/// Implements equations 8 and 9 from the Microsemi guide.
+pub fn park(
+    cos_angle: I16F16,
+    sin_angle: I16F16,
+    inputs: TwoPhaseStationaryOrthogonalReferenceFrame,
+) -> MovingReferenceFrame {
+    MovingReferenceFrame {
+        // Eq8
+        d: cos_angle * inputs.alpha + sin_angle * inputs.beta,
+        // Eq9
+        q: cos_angle * inputs.beta - sin_angle * inputs.alpha,
+    }
+}
+
+/// Inverse Park transform
+///
+/// Implements equations 10 and 11 from the Microsemi guide.
+pub fn inverse_park(
+    cos_angle: I16F16,
+    sin_angle: I16F16,
+    inputs: MovingReferenceFrame,
+) -> TwoPhaseStationaryOrthogonalReferenceFrame {
+    TwoPhaseStationaryOrthogonalReferenceFrame {
+        // Eq10
+        alpha: cos_angle * inputs.d - sin_angle * inputs.q,
+        // Eq11
+        beta: sin_angle * inputs.d + cos_angle * inputs.q,
     }
 }

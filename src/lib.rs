@@ -26,8 +26,7 @@ impl Foc {
         desired_torque: I16F16,
         dt: I16F16,
     ) -> [I16F16; 3] {
-        let cos_angle = cordic::cos(angle);
-        let sin_angle = cordic::sin(angle);
+        let (sin_angle, cos_angle) = cordic::sin_cos(angle);
 
         // Clarke transform
         let orthogonal_current =
@@ -38,13 +37,10 @@ impl Foc {
             });
 
         // Park transform
-        // Eq8
-        let i_d = cos_angle * orthogonal_current.alpha + sin_angle * orthogonal_current.beta;
-        // Eq9
-        let i_q = cos_angle * orthogonal_current.beta - sin_angle * orthogonal_current.alpha;
+        let rotating_current = park_clarke::park(cos_angle, sin_angle, orthogonal_current);
 
         // Error to desired torque & flux currents
-        let (error_i_d, error_i_q) = (-i_d, desired_torque - i_q);
+        let (error_i_d, error_i_q) = (-rotating_current.d, desired_torque - rotating_current.q);
 
         // PI controllers
         let v_d = self
@@ -55,17 +51,14 @@ impl Foc {
             .update(error_i_q, desired_torque, dt);
 
         // Inverse Park transform
-        // Eq10
-        let v_alpha = cos_angle * v_d - sin_angle * v_q;
-        // Eq11
-        let v_beta = sin_angle * v_d + cos_angle * v_q;
+        let orthogonal_voltage = park_clarke::inverse_park(
+            cos_angle,
+            sin_angle,
+            park_clarke::MovingReferenceFrame { d: v_d, q: v_q },
+        );
 
         // Inverse Clark transform
-        let voltages =
-            park_clarke::inverse_clarke(park_clarke::TwoPhaseStationaryOrthogonalReferenceFrame {
-                alpha: v_alpha,
-                beta: v_beta,
-            });
+        let voltages = park_clarke::inverse_clarke(orthogonal_voltage);
 
         [
             voltages.a,
