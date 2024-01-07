@@ -1,10 +1,14 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
-use nalgebra::ComplexField as _;
-use simba::scalar::FixedI16F16;
+use fixed::types::I16F16;
+use fixed_macro::types::I16F16;
 
+mod park_clarke;
 mod pid;
+
+const FRAC_1_SQRT_3: I16F16 = I16F16!(0.57735027);
+const SQRT_3: I16F16 = I16F16!(1.7320508);
 
 pub struct Foc {
     flux_current_controller: pid::PIController,
@@ -17,27 +21,27 @@ impl Foc {
     /// Returns the 3 PWM values
     pub fn update(
         &mut self,
-        currents: [FixedI16F16; 2],
-        angle: FixedI16F16,
-        desired_torque: FixedI16F16,
-        dt: FixedI16F16,
-    ) -> [FixedI16F16; 3] {
-        let cos_angle = angle.cos();
-        let sin_angle = angle.sin();
-        let frac_1_sqrt_3 = FixedI16F16::from_num(0.57735027f32); // 1/sqrt(3)
-        let sqrt_3 = FixedI16F16::from_num(1.7320508f32); // sqrt(3)
+        currents: [I16F16; 2],
+        angle: I16F16,
+        desired_torque: I16F16,
+        dt: I16F16,
+    ) -> [I16F16; 3] {
+        let cos_angle = cordic::cos(angle);
+        let sin_angle = cordic::sin(angle);
 
         // Clarke transform
-        // Eq3
-        let i_alpha = currents[0];
-        // Eq4
-        let i_beta = frac_1_sqrt_3 * (currents[0] + FixedI16F16::from_num(2) * currents[1]);
+        let orthogonal_current =
+            park_clarke::clarke(park_clarke::ThreePhaseStationaryReferenceFrame {
+                a: currents[0],
+                b: currents[1],
+                c: None,
+            });
 
         // Park transform
         // Eq8
-        let i_d = cos_angle * i_alpha + sin_angle * i_beta;
+        let i_d = cos_angle * orthogonal_current.alpha + sin_angle * orthogonal_current.beta;
         // Eq9
-        let i_q = cos_angle * i_beta - sin_angle * i_alpha;
+        let i_q = cos_angle * orthogonal_current.beta - sin_angle * orthogonal_current.alpha;
 
         // Error to desired torque & flux currents
         let (error_i_d, error_i_q) = (-i_d, desired_torque - i_q);
@@ -45,7 +49,7 @@ impl Foc {
         // PI controllers
         let v_d = self
             .flux_current_controller
-            .update(error_i_d, FixedI16F16::from_num(0), dt);
+            .update(error_i_d, I16F16::ZERO, dt);
         let v_q = self
             .torque_current_controller
             .update(error_i_q, desired_torque, dt);
@@ -60,9 +64,9 @@ impl Foc {
         // Eq5
         let v_a = v_alpha;
         // Eq6
-        let v_b = -(-v_alpha + sqrt_3 * v_beta) / FixedI16F16::from_num(2);
+        let v_b = -(-v_alpha + SQRT_3 * v_beta) / 2;
         // Eq7
-        let v_c = -(-v_alpha - sqrt_3 * v_beta) / FixedI16F16::from_num(2);
+        let v_c = -(-v_alpha - SQRT_3 * v_beta) / 2;
 
         [v_a, v_b, v_c]
     }
