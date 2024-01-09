@@ -28,28 +28,27 @@ pub fn svpwm(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [f32; 3] {
     };
 
     // Map a,b,c values to three phase
-    let t = 1.;
     let (ta, tb, tc);
     match sector {
         1 | 4 => {
-            ta = t + x - z;
-            tb = t + x + z;
-            tc = t - x + z;
+            ta = x - z;
+            tb = x + z;
+            tc = -x + z;
         }
         2 | 5 => {
-            ta = t + y - z;
-            tb = t + y + z;
-            tc = t - y - z;
+            ta = y - z;
+            tb = y + z;
+            tc = -y - z;
         }
         3 | 6 => {
-            ta = t + y - x;
-            tb = t - y + x;
-            tc = t - y - x;
+            ta = y - x;
+            tb = -y + x;
+            tc = -y - x;
         }
         _ => unreachable!("invalid sector"),
     }
 
-    [ta / 2., tb / 2., tc / 2.]
+    [ta, tb, tc]
 }
 
 /// Generate PWM values based on a sinusoidal waveform.
