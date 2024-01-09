@@ -12,15 +12,16 @@ pub trait Modulation {
     fn modulate(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3];
 
     /// Module the value, returning the result as a value between 0 and the specified
-    /// maximum value.
-    fn as_compare_value<const MAX: usize>(
+    /// maximum value inclusive.
+    fn as_compare_value<const MAX: u16>(
         value: TwoPhaseStationaryOrthogonalReferenceFrame,
     ) -> [u16; 3] {
-        if MAX >= u16::MAX as usize {
-            panic!("maximum value must fit within a u16");
-        }
-
-        Self::modulate(value).map(|val| ((val + I16F16::from_num(1)) * 2).saturating_to_num())
+        Self::modulate(value).map(|val| {
+            (((val + I16F16::from_num(1)) * (MAX as i32 + 1)) / 2)
+                .round()
+                .saturating_to_num::<u16>()
+                .clamp(0, MAX)
+        })
     }
 }
 

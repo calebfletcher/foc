@@ -1,6 +1,8 @@
 #![cfg_attr(not(test), no_std)]
 #![forbid(unsafe_code)]
 
+use core::marker::PhantomData;
+
 use fixed::types::I16F16;
 
 pub mod park_clarke;
@@ -10,12 +12,24 @@ pub mod pwm;
 const FRAC_1_SQRT_3: I16F16 = I16F16::lit("0.57735027");
 const SQRT_3: I16F16 = I16F16::lit("1.7320508");
 
-pub struct Foc {
+pub struct Foc<Modulator: pwm::Modulation, const PWM_RESOLUTION: u16> {
     flux_current_controller: pid::PIController,
     torque_current_controller: pid::PIController,
+    _phantom: PhantomData<Modulator>,
 }
 
-impl Foc {
+impl<Modulator: pwm::Modulation, const PWM_RESOLUTION: u16> Foc<Modulator, PWM_RESOLUTION> {
+    pub fn new(
+        flux_current_controller: pid::PIController,
+        torque_current_controller: pid::PIController,
+    ) -> Self {
+        Self {
+            flux_current_controller,
+            torque_current_controller,
+            _phantom: PhantomData,
+        }
+    }
+
     /// Current in amps
     /// Angle in radians
     /// Returns the 3 PWM values
@@ -25,7 +39,7 @@ impl Foc {
         angle: I16F16,
         desired_torque: I16F16,
         dt: I16F16,
-    ) -> [I16F16; 3] {
+    ) -> [u16; 3] {
         let (sin_angle, cos_angle) = cordic::sin_cos(angle);
 
         // Clarke transform
@@ -53,9 +67,7 @@ impl Foc {
             park_clarke::MovingReferenceFrame { d: v_d, q: v_q },
         );
 
-        // Inverse Clark transform
-        let voltages = park_clarke::inverse_clarke(orthogonal_voltage);
-
-        [voltages.a, voltages.b, voltages.c]
+        // Modulate the result to PWM values
+        Modulator::as_compare_value::<PWM_RESOLUTION>(orthogonal_voltage)
     }
 }
