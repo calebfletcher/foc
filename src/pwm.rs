@@ -1,9 +1,16 @@
 //! Algorithms to convert a value from a two-phase stationary orthogonal
 //! reference frame to a value suitable to be used for PWM generation.
+//!
+//! The resulting waveforms of the PWM generation methods are shown below.
+//! ![PWM Methods](https://raw.githubusercontent.com/calebfletcher/foc/main/docs/pwm_methods.png)
 
 use crate::park_clarke::TwoPhaseStationaryOrthogonalReferenceFrame;
 
-/// Returns the three PWM values in the range 0-255, one for each motor coil.
+/// Generate PWM values based on a space-vector method.
+///
+/// This method results in a waveform that is more efficient than sinusoidal
+/// PWM while having better current ripple than the other methods. However, it
+/// comes at the expense of a more complex computation.
 pub fn svpwm(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [f32; 3] {
     // Convert alpha/beta to x/y/z
     const SQRT_3: f32 = 1.7320508;
@@ -65,6 +72,10 @@ pub fn spwm(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [f32; 3] {
     ]
 }
 
+/// Generate PWM values based on a trapezoidal wave.
+///
+/// Note that for this method to work properly, when the output is 0 the
+/// resective channel should be disabled/set as high impedance.
 pub fn trapezoidal(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [f32; 3] {
     let voltages = crate::park_clarke::inverse_clarke(value);
 
@@ -78,6 +89,7 @@ pub fn trapezoidal(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [f32; 3
     ]
 }
 
+/// Generate PWM values based on a square wave.
 pub fn square(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [f32; 3] {
     let voltages = crate::park_clarke::inverse_clarke(value);
 
