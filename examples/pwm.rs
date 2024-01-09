@@ -14,6 +14,8 @@ struct Values {
     orthogonal_atan: f32,
     svpwm: [f32; 3],
     spwm: [f32; 3],
+    trapezoidal: [f32; 3],
+    square: [f32; 3],
 }
 
 fn main() -> Result<(), anyhow::Error> {
@@ -51,6 +53,8 @@ fn main() -> Result<(), anyhow::Error> {
 
         let svpwm = foc::pwm::svpwm(orthogonal_voltage.clone());
         let spwm = foc::pwm::spwm(orthogonal_voltage.clone());
+        let trapezoidal = foc::pwm::trapezoidal(orthogonal_voltage.clone());
+        let square = foc::pwm::square(orthogonal_voltage.clone());
 
         let orthogonal_atan = orthogonal_voltage
             .beta
@@ -68,6 +72,8 @@ fn main() -> Result<(), anyhow::Error> {
                 orthogonal_atan: orthogonal_atan.rem_euclid(TAU),
                 svpwm,
                 spwm,
+                trapezoidal,
+                square,
             },
             &mut buffer,
         )

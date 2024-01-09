@@ -64,3 +64,26 @@ pub fn spwm(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [f32; 3] {
         voltages.c.unwrap().to_num::<f32>(),
     ]
 }
+
+pub fn trapezoidal(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [f32; 3] {
+    let voltages = crate::park_clarke::inverse_clarke(value);
+
+    [
+        (voltages.a * 2).round_to_zero().signum().to_num::<f32>(),
+        (voltages.b * 2).round_to_zero().signum().to_num::<f32>(),
+        (voltages.c.unwrap() * 2)
+            .round_to_zero()
+            .signum()
+            .to_num::<f32>(),
+    ]
+}
+
+pub fn square(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [f32; 3] {
+    let voltages = crate::park_clarke::inverse_clarke(value);
+
+    [
+        voltages.a.signum().to_num::<f32>(),
+        voltages.b.signum().to_num::<f32>(),
+        voltages.c.unwrap().signum().to_num::<f32>(),
+    ]
+}
