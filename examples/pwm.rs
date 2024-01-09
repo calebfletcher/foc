@@ -1,7 +1,6 @@
 use std::{collections::BTreeMap, f32::consts::TAU, fs::File, io::BufWriter, sync::Arc};
 
 use fixed::types::I16F16;
-use fixed_macro::types::I16F16;
 use foc::park_clarke;
 use serde::Serialize;
 
@@ -46,8 +45,8 @@ fn main() -> Result<(), anyhow::Error> {
             cos_angle,
             sin_angle,
             park_clarke::MovingReferenceFrame {
-                d: I16F16!(0),
-                q: I16F16!(1),
+                d: I16F16::ZERO,
+                q: I16F16::ONE,
             },
         );
 
@@ -70,10 +69,10 @@ fn main() -> Result<(), anyhow::Error> {
                 orthogonal_voltage_alpha: orthogonal_voltage.alpha.to_num(),
                 orthogonal_voltage_beta: orthogonal_voltage.beta.to_num(),
                 orthogonal_atan: orthogonal_atan.rem_euclid(TAU),
-                svpwm,
-                spwm,
-                trapezoidal,
-                square,
+                svpwm: svpwm.map(|v| v.to_num()),
+                spwm: spwm.map(|v| v.to_num()),
+                trapezoidal: trapezoidal.map(|v| v.to_num()),
+                square: square.map(|v| v.to_num()),
             },
             &mut buffer,
         )

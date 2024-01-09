@@ -19,7 +19,6 @@ categories = [
 [dependencies]
 cordic = "0.1.5"
 fixed = "1.24.0"
-fixed-macro = "1.2.0"
 
 [dev-dependencies]
 anyhow = "1.0.79"

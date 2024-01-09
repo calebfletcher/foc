@@ -2,14 +2,13 @@
 #![forbid(unsafe_code)]
 
 use fixed::types::I16F16;
-use fixed_macro::types::I16F16;
 
 pub mod park_clarke;
 mod pid;
 pub mod pwm;
 
-const FRAC_1_SQRT_3: I16F16 = I16F16!(0.57735027);
-const SQRT_3: I16F16 = I16F16!(1.7320508);
+const FRAC_1_SQRT_3: I16F16 = I16F16::lit("0.57735027");
+const SQRT_3: I16F16 = I16F16::lit("1.7320508");
 
 pub struct Foc {
     flux_current_controller: pid::PIController,
@@ -31,10 +30,9 @@ impl Foc {
 
         // Clarke transform
         let orthogonal_current =
-            park_clarke::clarke(park_clarke::ThreePhaseStationaryReferenceFrame {
+            park_clarke::clarke(park_clarke::ThreePhaseBalancedStationaryReferenceFrame {
                 a: currents[0],
                 b: currents[1],
-                c: None,
             });
 
         // Park transform
@@ -58,10 +56,6 @@ impl Foc {
         // Inverse Clark transform
         let voltages = park_clarke::inverse_clarke(orthogonal_voltage);
 
-        [
-            voltages.a,
-            voltages.b,
-            voltages.c.expect("inverse clarke filled out third value"),
-        ]
+        [voltages.a, voltages.b, voltages.c]
     }
 }

@@ -4,6 +4,8 @@
 //! The resulting waveforms of the PWM generation methods are shown below.
 //! ![PWM Methods](https://raw.githubusercontent.com/calebfletcher/foc/main/docs/pwm_methods.png)
 
+use fixed::types::I16F16;
+
 use crate::park_clarke::TwoPhaseStationaryOrthogonalReferenceFrame;
 
 /// Generate PWM values based on a space-vector method.
@@ -11,21 +13,18 @@ use crate::park_clarke::TwoPhaseStationaryOrthogonalReferenceFrame;
 /// This method results in a waveform that is more efficient than sinusoidal
 /// PWM while having better current ripple than the other methods. However, it
 /// comes at the expense of a more complex computation.
-pub fn svpwm(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [f32; 3] {
+///
+/// Returns a value between -1 and 1 for each channel.
+pub fn svpwm(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
     // Convert alpha/beta to x/y/z
-    const SQRT_3: f32 = 1.7320508;
-    let sqrt_3_alpha = SQRT_3 * value.alpha.to_num::<f32>();
-    let beta = value.beta.to_num::<f32>();
+    let sqrt_3_alpha = I16F16::SQRT_3 * value.alpha;
+    let beta = value.beta;
     let x = beta;
-    let y = (beta + sqrt_3_alpha) / 2.;
-    let z = (beta - sqrt_3_alpha) / 2.;
+    let y = (beta + sqrt_3_alpha) / 2;
+    let z = (beta - sqrt_3_alpha) / 2;
 
     // Calculate which sector the value falls in
-    let sector: u8 = match (
-        x.is_sign_positive(),
-        y.is_sign_positive(),
-        z.is_sign_positive(),
-    ) {
+    let sector: u8 = match (x.is_positive(), y.is_positive(), z.is_positive()) {
         (true, true, false) => 1,
         (_, true, true) => 2,
         (true, false, true) => 3,
@@ -62,40 +61,39 @@ pub fn svpwm(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [f32; 3] {
 ///
 /// While this method is very simple (and fast) it is less efficient than SVPWM
 /// as it does not utilise the bus voltage as well.
-pub fn spwm(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [f32; 3] {
+///
+/// Returns a value between -1 and 1 for each channel.
+pub fn spwm(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
     let voltages = crate::park_clarke::inverse_clarke(value);
 
-    [
-        voltages.a.to_num::<f32>(),
-        voltages.b.to_num::<f32>(),
-        voltages.c.unwrap().to_num::<f32>(),
-    ]
+    [voltages.a, voltages.b, voltages.c]
 }
 
 /// Generate PWM values based on a trapezoidal wave.
 ///
 /// Note that for this method to work properly, when the output is 0 the
 /// resective channel should be disabled/set as high impedance.
-pub fn trapezoidal(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [f32; 3] {
+///
+/// Returns a value between -1 and 1 for each channel.
+pub fn trapezoidal(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
     let voltages = crate::park_clarke::inverse_clarke(value);
 
     [
-        (voltages.a * 2).round_to_zero().signum().to_num::<f32>(),
-        (voltages.b * 2).round_to_zero().signum().to_num::<f32>(),
-        (voltages.c.unwrap() * 2)
-            .round_to_zero()
-            .signum()
-            .to_num::<f32>(),
+        (voltages.a * 2).round_to_zero().signum(),
+        (voltages.b * 2).round_to_zero().signum(),
+        (voltages.c * 2).round_to_zero().signum(),
     ]
 }
 
 /// Generate PWM values based on a square wave.
-pub fn square(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [f32; 3] {
+///
+/// Returns a value between -1 and 1 for each channel.
+pub fn square(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
     let voltages = crate::park_clarke::inverse_clarke(value);
 
     [
-        voltages.a.signum().to_num::<f32>(),
-        voltages.b.signum().to_num::<f32>(),
-        voltages.c.unwrap().signum().to_num::<f32>(),
+        voltages.a.signum(),
+        voltages.b.signum(),
+        voltages.c.signum(),
     ]
 }
