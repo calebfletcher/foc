@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, f32::consts::TAU, fs::File, io::BufWriter, sync::Arc};
 
 use fixed::types::I16F16;
-use foc::park_clarke;
+use foc::{park_clarke, pwm::Modulation};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -50,10 +50,10 @@ fn main() -> Result<(), anyhow::Error> {
             },
         );
 
-        let svpwm = foc::pwm::svpwm(orthogonal_voltage.clone());
-        let spwm = foc::pwm::spwm(orthogonal_voltage.clone());
-        let trapezoidal = foc::pwm::trapezoidal(orthogonal_voltage.clone());
-        let square = foc::pwm::square(orthogonal_voltage.clone());
+        let svpwm = foc::pwm::SpaceVector::modulate(orthogonal_voltage.clone());
+        let spwm = foc::pwm::Sinusoidal::modulate(orthogonal_voltage.clone());
+        let trapezoidal = foc::pwm::Trapezoidal::modulate(orthogonal_voltage.clone());
+        let square = foc::pwm::Square::modulate(orthogonal_voltage.clone());
 
         let orthogonal_atan = orthogonal_voltage
             .beta

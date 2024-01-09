@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+- `pwm::Modulation` trait that all modulation types implement.
+### Changed
+- Convert most uses of floats to fixed-point math.
+- PWM modulation methods are now structs.
+### Removed
+- Remove `fixed_macro` dependency.
 
 ## [0.2.0] - 2024-01-09
 ### Added

@@ -8,6 +8,22 @@ use fixed::types::I16F16;
 
 use crate::park_clarke::TwoPhaseStationaryOrthogonalReferenceFrame;
 
+pub trait Modulation {
+    fn modulate(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3];
+
+    /// Module the value, returning the result as a value between 0 and the specified
+    /// maximum value.
+    fn as_compare_value<const MAX: usize>(
+        value: TwoPhaseStationaryOrthogonalReferenceFrame,
+    ) -> [u16; 3] {
+        if MAX >= u16::MAX as usize {
+            panic!("maximum value must fit within a u16");
+        }
+
+        Self::modulate(value).map(|val| ((val + I16F16::from_num(1)) * 2).saturating_to_num())
+    }
+}
+
 /// Generate PWM values based on a space-vector method.
 ///
 /// This method results in a waveform that is more efficient than sinusoidal
@@ -15,46 +31,50 @@ use crate::park_clarke::TwoPhaseStationaryOrthogonalReferenceFrame;
 /// comes at the expense of a more complex computation.
 ///
 /// Returns a value between -1 and 1 for each channel.
-pub fn svpwm(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
-    // Convert alpha/beta to x/y/z
-    let sqrt_3_alpha = I16F16::SQRT_3 * value.alpha;
-    let beta = value.beta;
-    let x = beta;
-    let y = (beta + sqrt_3_alpha) / 2;
-    let z = (beta - sqrt_3_alpha) / 2;
+pub struct SpaceVector;
 
-    // Calculate which sector the value falls in
-    let sector: u8 = match (x.is_positive(), y.is_positive(), z.is_positive()) {
-        (true, true, false) => 1,
-        (_, true, true) => 2,
-        (true, false, true) => 3,
-        (false, false, true) => 4,
-        (_, false, false) => 5,
-        (false, true, false) => 6,
-    };
+impl Modulation for SpaceVector {
+    fn modulate(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
+        // Convert alpha/beta to x/y/z
+        let sqrt_3_alpha = I16F16::SQRT_3 * value.alpha;
+        let beta = value.beta;
+        let x = beta;
+        let y = (beta + sqrt_3_alpha) / 2;
+        let z = (beta - sqrt_3_alpha) / 2;
 
-    // Map a,b,c values to three phase
-    let (ta, tb, tc);
-    match sector {
-        1 | 4 => {
-            ta = x - z;
-            tb = x + z;
-            tc = -x + z;
+        // Calculate which sector the value falls in
+        let sector: u8 = match (x.is_positive(), y.is_positive(), z.is_positive()) {
+            (true, true, false) => 1,
+            (_, true, true) => 2,
+            (true, false, true) => 3,
+            (false, false, true) => 4,
+            (_, false, false) => 5,
+            (false, true, false) => 6,
+        };
+
+        // Map a,b,c values to three phase
+        let (ta, tb, tc);
+        match sector {
+            1 | 4 => {
+                ta = x - z;
+                tb = x + z;
+                tc = -x + z;
+            }
+            2 | 5 => {
+                ta = y - z;
+                tb = y + z;
+                tc = -y - z;
+            }
+            3 | 6 => {
+                ta = y - x;
+                tb = -y + x;
+                tc = -y - x;
+            }
+            _ => unreachable!("invalid sector"),
         }
-        2 | 5 => {
-            ta = y - z;
-            tb = y + z;
-            tc = -y - z;
-        }
-        3 | 6 => {
-            ta = y - x;
-            tb = -y + x;
-            tc = -y - x;
-        }
-        _ => unreachable!("invalid sector"),
+
+        [ta, tb, tc]
     }
-
-    [ta, tb, tc]
 }
 
 /// Generate PWM values based on a sinusoidal waveform.
@@ -63,10 +83,14 @@ pub fn svpwm(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
 /// as it does not utilise the bus voltage as well.
 ///
 /// Returns a value between -1 and 1 for each channel.
-pub fn spwm(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
-    let voltages = crate::park_clarke::inverse_clarke(value);
+pub struct Sinusoidal;
 
-    [voltages.a, voltages.b, voltages.c]
+impl Modulation for Sinusoidal {
+    fn modulate(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
+        let voltages = crate::park_clarke::inverse_clarke(value);
+
+        [voltages.a, voltages.b, voltages.c]
+    }
 }
 
 /// Generate PWM values based on a trapezoidal wave.
@@ -75,25 +99,33 @@ pub fn spwm(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
 /// resective channel should be disabled/set as high impedance.
 ///
 /// Returns a value between -1 and 1 for each channel.
-pub fn trapezoidal(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
-    let voltages = crate::park_clarke::inverse_clarke(value);
+pub struct Trapezoidal;
 
-    [
-        (voltages.a * 2).round_to_zero().signum(),
-        (voltages.b * 2).round_to_zero().signum(),
-        (voltages.c * 2).round_to_zero().signum(),
-    ]
+impl Modulation for Trapezoidal {
+    fn modulate(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
+        let voltages = crate::park_clarke::inverse_clarke(value);
+
+        [
+            (voltages.a * 2).round_to_zero().signum(),
+            (voltages.b * 2).round_to_zero().signum(),
+            (voltages.c * 2).round_to_zero().signum(),
+        ]
+    }
 }
 
 /// Generate PWM values based on a square wave.
 ///
 /// Returns a value between -1 and 1 for each channel.
-pub fn square(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
-    let voltages = crate::park_clarke::inverse_clarke(value);
+pub struct Square;
 
-    [
-        voltages.a.signum(),
-        voltages.b.signum(),
-        voltages.c.signum(),
-    ]
+impl Modulation for Square {
+    fn modulate(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
+        let voltages = crate::park_clarke::inverse_clarke(value);
+
+        [
+            voltages.a.signum(),
+            voltages.b.signum(),
+            voltages.c.signum(),
+        ]
+    }
 }
