@@ -6,16 +6,14 @@
 
 use fixed::types::I16F16;
 
-use crate::park_clarke::TwoPhaseStationaryOrthogonalReferenceFrame;
+use crate::park_clarke::TwoPhaseReferenceFrame;
 
 pub trait Modulation {
-    fn modulate(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3];
+    fn modulate(value: TwoPhaseReferenceFrame) -> [I16F16; 3];
 
     /// Module the value, returning the result as a value between 0 and the specified
     /// maximum value inclusive.
-    fn as_compare_value<const MAX: u16>(
-        value: TwoPhaseStationaryOrthogonalReferenceFrame,
-    ) -> [u16; 3] {
+    fn as_compare_value<const MAX: u16>(value: TwoPhaseReferenceFrame) -> [u16; 3] {
         Self::modulate(value).map(|val| {
             (((val + I16F16::from_num(1)) * (MAX as i32 + 1)) / 2)
                 .round()
@@ -35,7 +33,7 @@ pub trait Modulation {
 pub struct SpaceVector;
 
 impl Modulation for SpaceVector {
-    fn modulate(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
+    fn modulate(value: TwoPhaseReferenceFrame) -> [I16F16; 3] {
         // Convert alpha/beta to x/y/z
         let sqrt_3_alpha = I16F16::SQRT_3 * value.alpha;
         let beta = value.beta;
@@ -87,7 +85,7 @@ impl Modulation for SpaceVector {
 pub struct Sinusoidal;
 
 impl Modulation for Sinusoidal {
-    fn modulate(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
+    fn modulate(value: TwoPhaseReferenceFrame) -> [I16F16; 3] {
         let voltages = crate::park_clarke::inverse_clarke(value);
 
         [voltages.a, voltages.b, voltages.c]
@@ -103,7 +101,7 @@ impl Modulation for Sinusoidal {
 pub struct Trapezoidal;
 
 impl Modulation for Trapezoidal {
-    fn modulate(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
+    fn modulate(value: TwoPhaseReferenceFrame) -> [I16F16; 3] {
         let voltages = crate::park_clarke::inverse_clarke(value);
 
         [
@@ -120,7 +118,7 @@ impl Modulation for Trapezoidal {
 pub struct Square;
 
 impl Modulation for Square {
-    fn modulate(value: TwoPhaseStationaryOrthogonalReferenceFrame) -> [I16F16; 3] {
+    fn modulate(value: TwoPhaseReferenceFrame) -> [I16F16; 3] {
         let voltages = crate::park_clarke::inverse_clarke(value);
 
         [

@@ -44,7 +44,7 @@ impl<Modulator: pwm::Modulation, const PWM_RESOLUTION: u16> Foc<Modulator, PWM_R
 
         // Clarke transform
         let orthogonal_current =
-            park_clarke::clarke(park_clarke::ThreePhaseBalancedStationaryReferenceFrame {
+            park_clarke::clarke(park_clarke::ThreePhaseBalancedReferenceFrame {
                 a: currents[0],
                 b: currents[1],
             });
@@ -64,7 +64,7 @@ impl<Modulator: pwm::Modulation, const PWM_RESOLUTION: u16> Foc<Modulator, PWM_R
         let orthogonal_voltage = park_clarke::inverse_park(
             cos_angle,
             sin_angle,
-            park_clarke::MovingReferenceFrame { d: v_d, q: v_q },
+            park_clarke::RotatingReferenceFrame { d: v_d, q: v_q },
         );
 
         // Modulate the result to PWM values

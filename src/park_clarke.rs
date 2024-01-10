@@ -6,28 +6,35 @@ use crate::{FRAC_1_SQRT_3, SQRT_3};
 
 use fixed::types::I16F16;
 
+/// A value in a reference frame that moves with the electrical angle of the
+/// motor. The two axes are orthogonal.
 #[derive(Debug, Clone)]
-pub struct MovingReferenceFrame {
+pub struct RotatingReferenceFrame {
     pub d: I16F16,
     pub q: I16F16,
 }
 
+/// A value in a reference frame that is stationary. The two axes are
+/// orthogonal.
 #[derive(Debug, Clone)]
-pub struct TwoPhaseStationaryOrthogonalReferenceFrame {
+pub struct TwoPhaseReferenceFrame {
     pub alpha: I16F16,
     pub beta: I16F16,
 }
 
+/// A three-phase value in a stationary reference frame. The values do not
+/// necessarily sum to 0.
 #[derive(Debug, Clone)]
-pub struct ThreePhaseStationaryReferenceFrame {
+pub struct ThreePhaseReferenceFrame {
     pub a: I16F16,
     pub b: I16F16,
-    /// C is optional if a + b + c equals zero.
     pub c: I16F16,
 }
 
+/// A three-phase value in a stationary reference frame, where the three values
+/// sum to 0. As such, the third value is not given.
 #[derive(Debug, Clone)]
-pub struct ThreePhaseBalancedStationaryReferenceFrame {
+pub struct ThreePhaseBalancedReferenceFrame {
     pub a: I16F16,
     pub b: I16F16,
 }
@@ -35,10 +42,8 @@ pub struct ThreePhaseBalancedStationaryReferenceFrame {
 /// Clarke transform
 ///
 /// Implements equations 1-4 from the Microsemi guide.
-pub fn clarke(
-    inputs: ThreePhaseBalancedStationaryReferenceFrame,
-) -> TwoPhaseStationaryOrthogonalReferenceFrame {
-    TwoPhaseStationaryOrthogonalReferenceFrame {
+pub fn clarke(inputs: ThreePhaseBalancedReferenceFrame) -> TwoPhaseReferenceFrame {
+    TwoPhaseReferenceFrame {
         // Eq3
         alpha: inputs.a,
         // Eq4
@@ -49,10 +54,8 @@ pub fn clarke(
 /// Inverse Clarke transform
 ///
 /// Implements equations 5-7 from the Microsemi guide.
-pub fn inverse_clarke(
-    inputs: TwoPhaseStationaryOrthogonalReferenceFrame,
-) -> ThreePhaseStationaryReferenceFrame {
-    ThreePhaseStationaryReferenceFrame {
+pub fn inverse_clarke(inputs: TwoPhaseReferenceFrame) -> ThreePhaseReferenceFrame {
+    ThreePhaseReferenceFrame {
         // Eq5
         a: inputs.alpha,
         // Eq6
@@ -68,9 +71,9 @@ pub fn inverse_clarke(
 pub fn park(
     cos_angle: I16F16,
     sin_angle: I16F16,
-    inputs: TwoPhaseStationaryOrthogonalReferenceFrame,
-) -> MovingReferenceFrame {
-    MovingReferenceFrame {
+    inputs: TwoPhaseReferenceFrame,
+) -> RotatingReferenceFrame {
+    RotatingReferenceFrame {
         // Eq8
         d: cos_angle * inputs.alpha + sin_angle * inputs.beta,
         // Eq9
@@ -84,9 +87,9 @@ pub fn park(
 pub fn inverse_park(
     cos_angle: I16F16,
     sin_angle: I16F16,
-    inputs: MovingReferenceFrame,
-) -> TwoPhaseStationaryOrthogonalReferenceFrame {
-    TwoPhaseStationaryOrthogonalReferenceFrame {
+    inputs: RotatingReferenceFrame,
+) -> TwoPhaseReferenceFrame {
+    TwoPhaseReferenceFrame {
         // Eq10
         alpha: cos_angle * inputs.d - sin_angle * inputs.q,
         // Eq11
@@ -100,7 +103,7 @@ mod tests {
 
     #[track_caller]
     fn clark_e_round_trip(a: f32, b: f32) {
-        let input = ThreePhaseBalancedStationaryReferenceFrame {
+        let input = ThreePhaseBalancedReferenceFrame {
             a: I16F16::from_num(a),
             b: I16F16::from_num(b),
         };
@@ -133,7 +136,7 @@ mod tests {
         let angle = I16F16::from_num(0.82);
         let (sin_angle, cos_angle) = cordic::sin_cos(angle);
 
-        let input = TwoPhaseStationaryOrthogonalReferenceFrame {
+        let input = TwoPhaseReferenceFrame {
             alpha: I16F16::from_num(2),
             beta: I16F16::from_num(3),
         };

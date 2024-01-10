@@ -44,7 +44,7 @@ fn main() -> Result<(), anyhow::Error> {
         let orthogonal_voltage = park_clarke::inverse_park(
             cos_angle,
             sin_angle,
-            park_clarke::MovingReferenceFrame {
+            park_clarke::RotatingReferenceFrame {
                 d: I16F16::ZERO,
                 q: I16F16::ONE,
             },
