@@ -1,5 +1,6 @@
 #![cfg_attr(not(test), no_std)]
 #![forbid(unsafe_code)]
+#![doc = include_str!("../README.md")]
 
 use core::marker::PhantomData;
 
@@ -12,6 +13,11 @@ pub mod pwm;
 const FRAC_1_SQRT_3: I16F16 = I16F16::lit("0.57735027");
 const SQRT_3: I16F16 = I16F16::lit("1.7320508");
 
+/// The Field-Oriented Controller.
+///
+/// If this controller does not match the exact setup that you desire, then all
+/// of the underlying algorithms are available to use instead (see the
+/// [`park_clarke`], [`pwm`], and [`pid`] modules).
 pub struct Foc<Modulator: pwm::Modulation, const PWM_RESOLUTION: u16> {
     flux_current_controller: pid::PIController,
     torque_current_controller: pid::PIController,
@@ -19,6 +25,8 @@ pub struct Foc<Modulator: pwm::Modulation, const PWM_RESOLUTION: u16> {
 }
 
 impl<Modulator: pwm::Modulation, const PWM_RESOLUTION: u16> Foc<Modulator, PWM_RESOLUTION> {
+    /// Create a new FOC controller with the desired PI controllers for the flux
+    /// and torque components.
     pub fn new(
         flux_current_controller: pid::PIController,
         torque_current_controller: pid::PIController,
@@ -30,9 +38,16 @@ impl<Modulator: pwm::Modulation, const PWM_RESOLUTION: u16> Foc<Modulator, PWM_R
         }
     }
 
-    /// Current in amps
-    /// Angle in radians
-    /// Returns the 3 PWM values
+    /// Update the FOC controller with the current state of the motor.
+    ///
+    /// Params:
+    /// - `currents`: phase currents in amps
+    /// - `angle`: electrical angle in radians
+    /// - `desired_torque`: amps
+    /// - `dt`: time delta since last update, in units consistent with the PI gain units.
+    ///
+    /// Returns:
+    /// - The 3 PWM values to be set on your timer channels.
     pub fn update(
         &mut self,
         currents: [I16F16; 2],

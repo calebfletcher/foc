@@ -1,13 +1,15 @@
-#![allow(dead_code)]
+//! Fixed-point PI and PID controllers.
 
 use fixed::types::I16F16;
 
+/// A fixed-point PI controller.
 pub struct PIController {
     k_p: I16F16,
     integral: IntegralComponent,
 }
 
 impl PIController {
+    /// Create a new PI controller with the given gains.
     pub fn new(k_p: I16F16, k_i: I16F16) -> Self {
         Self {
             k_p,
@@ -18,12 +20,17 @@ impl PIController {
         }
     }
 
+    /// Update the PI controller, returning the new output value.
     pub fn update(&mut self, measurement: I16F16, setpoint: I16F16, dt: I16F16) -> I16F16 {
         let error = measurement - setpoint;
         self.k_p * error + self.integral.update(error, dt)
     }
 }
 
+/// A fixed-point PID controller.
+///
+/// Uses the derivative-on-measurement technique to avoid derivative kicks on
+/// setpoint changes.
 pub struct PIDController {
     k_p: I16F16,
     integral: IntegralComponent,
@@ -31,6 +38,7 @@ pub struct PIDController {
 }
 
 impl PIDController {
+    /// Create a new PID controller with the given gains.
     pub fn new(k_p: I16F16, k_i: I16F16, k_d: I16F16) -> Self {
         Self {
             k_p,
@@ -45,6 +53,7 @@ impl PIDController {
         }
     }
 
+    /// Update the PID controller, returning the new output value.
     pub fn update(&mut self, measurement: I16F16, setpoint: I16F16, dt: I16F16) -> I16F16 {
         let error = measurement - setpoint;
         self.k_p * error + self.integral.update(error, dt) + self.derivative.update(measurement, dt)
