@@ -6,7 +6,7 @@ use core::marker::PhantomData;
 use fixed::types::I16F16;
 
 pub mod park_clarke;
-mod pid;
+pub mod pid;
 pub mod pwm;
 
 const FRAC_1_SQRT_3: I16F16 = I16F16::lit("0.57735027");

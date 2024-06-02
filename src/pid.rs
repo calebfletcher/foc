@@ -8,6 +8,16 @@ pub struct PIController {
 }
 
 impl PIController {
+    pub fn new(k_p: I16F16, k_i: I16F16) -> Self {
+        Self {
+            k_p,
+            integral: IntegralComponent {
+                k_i,
+                integral: I16F16::ZERO,
+            },
+        }
+    }
+
     pub fn update(&mut self, measurement: I16F16, setpoint: I16F16, dt: I16F16) -> I16F16 {
         let error = measurement - setpoint;
         self.k_p * error + self.integral.update(error, dt)
@@ -21,6 +31,20 @@ pub struct PIDController {
 }
 
 impl PIDController {
+    pub fn new(k_p: I16F16, k_i: I16F16, k_d: I16F16) -> Self {
+        Self {
+            k_p,
+            integral: IntegralComponent {
+                k_i,
+                integral: I16F16::ZERO,
+            },
+            derivative: DerivativeComponent {
+                k_d,
+                last_measurement: None,
+            },
+        }
+    }
+
     pub fn update(&mut self, measurement: I16F16, setpoint: I16F16, dt: I16F16) -> I16F16 {
         let error = measurement - setpoint;
         self.k_p * error + self.integral.update(error, dt) + self.derivative.update(measurement, dt)
@@ -34,8 +58,8 @@ struct IntegralComponent {
 
 impl IntegralComponent {
     fn update(&mut self, error: I16F16, dt: I16F16) -> I16F16 {
-        self.integral += error * dt;
-        self.k_i * self.integral
+        self.integral += self.k_i * error * dt;
+        self.integral
     }
 }
 
