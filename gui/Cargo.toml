@@ -1,0 +1,3 @@
+[workspace]
+members = ["gui", "icd"]
+resolver = "2"
