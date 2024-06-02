@@ -1,8 +1,9 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.0] - 2024-06-02
 ### Added
 - `pwm::Modulation` trait that all modulation types implement.
+- FOC struct can now be constructed.
 ### Changed
 - Convert most uses of floats to fixed-point math.
 - PWM modulation methods are now structs.
