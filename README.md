@@ -2,6 +2,8 @@
 
 An implementation of [Field Oriented Control](https://en.wikipedia.org/wiki/Field_Oriented_Control) algorithms in Rust, designed for use in embedded systems.
 
+See [gui](gui) for a real-world use of this crate as well as a GUI to tune the controller in real-time.
+
 ## Goals
 - Modular and extendable implementation of FOC algorithms.
 - Exclusively use fixed-point math for all FOC calculations, using the [`fixed`](https://crates.io/crates/fixed) crate.
