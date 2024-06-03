@@ -1,17 +1,18 @@
+use egui::{Align, Layout};
 use egui_tiles::{Container, Linear, LinearDir};
 
 enum Pane {
-    Settings,
-    Text(String),
+    Connections,
+    Graph,
 }
 
-struct TreeBehavior {}
+struct Behaviour {}
 
-impl egui_tiles::Behavior<Pane> for TreeBehavior {
+impl egui_tiles::Behavior<Pane> for Behaviour {
     fn tab_title_for_pane(&mut self, pane: &Pane) -> egui::WidgetText {
         match pane {
-            Pane::Settings => "Settings".into(),
-            Pane::Text(text) => text.clone().into(),
+            Pane::Connections => "Connections".into(),
+            Pane::Graph => "Graph".into(),
         }
     }
 
@@ -22,12 +23,40 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
         pane: &mut Pane,
     ) -> egui_tiles::UiResponse {
         match pane {
-            Pane::Settings => {
-                ui.label("settings");
+            Pane::Connections => {
+                let display_connection = |ui: &mut egui::Ui, connection: &str| {
+                    ui.horizontal(|ui| {
+                        ui.label(connection);
+                        ui.allocate_ui_with_layout(
+                            ui.available_size_before_wrap()
+                                - egui::Vec2 {
+                                    x: ui.spacing().item_spacing.x,
+                                    y: 0.,
+                                },
+                            Layout::right_to_left(Align::TOP),
+                            |ui| {
+                                if ui.button("Connect").clicked() {
+                                    println!("connect");
+                                }
+                            },
+                        );
+                    });
+                };
+
+                ui.label("RTT");
+                ui.group(|ui| {
+                    // TODO: Read list of RTT devices
+                    display_connection(ui, "Device 0");
+                    display_connection(ui, "Device 1");
+                    display_connection(ui, "Device 2");
+                });
+                ui.label("USB");
+                ui.group(|ui| {
+                    // TODO: Read list of USB devices
+                    display_connection(ui, "Device 0");
+                });
             }
-            Pane::Text(text) => {
-                ui.text_edit_singleline(text);
-            }
+            Pane::Graph => {}
         }
 
         Default::default()
@@ -45,8 +74,8 @@ fn main() -> Result<(), eframe::Error> {
 
     // Setup tiles
     let mut tiles = egui_tiles::Tiles::default();
-    let settings = tiles.insert_pane(Pane::Settings);
-    let text = tiles.insert_pane(Pane::Text("Hello".to_owned()));
+    let settings = tiles.insert_pane(Pane::Connections);
+    let text = tiles.insert_pane(Pane::Graph);
 
     // Setup initial tile layout
     let mut inner = Linear {
@@ -63,8 +92,9 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_simple_native("FOC Remote Tuner", options, move |ctx, _frame| {
         ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(egui::SystemTheme::Dark));
         egui::CentralPanel::default().show(ctx, |ui| {
-            let mut behavior = TreeBehavior {};
+            let mut behavior = Behaviour {};
             tree.ui(&mut behavior, ui);
         });
+        ctx.request_repaint();
     })
 }
