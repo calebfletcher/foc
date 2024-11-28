@@ -1,7 +1,10 @@
-use egui::{
-    epaint::Shadow, pos2, vec2, Align, Color32, Layout, Pos2, Rect, Rounding, Sense, Stroke, Vec2,
-};
+use egui::{epaint::Shadow, pos2, vec2, Align, Layout, Pos2, Rounding};
 use egui_tiles::{Container, Linear, LinearDir};
+use fixed::types::I16F16;
+use foc::pwm::Modulation;
+
+mod connection;
+mod widgets;
 
 enum Pane {
     Connections,
@@ -9,7 +12,34 @@ enum Pane {
 }
 
 struct Behaviour {
-    rotating_setpoint: Option<Pos2>,
+    motor_state: MotorState,
+}
+
+struct MotorState {
+    rotating_setpoint: Pos2,
+    two_phase_setpoint: Pos2,
+    three_phase_setpoint: [f32; 3],
+    electrical_angle_rad: f32,
+}
+
+impl MotorState {
+    fn update(&mut self) {
+        let dq = foc::park_clarke::RotatingReferenceFrame {
+            d: I16F16::from_num(self.rotating_setpoint.x),
+            q: I16F16::from_num(self.rotating_setpoint.y),
+        };
+
+        let sin_angle = I16F16::from_num(self.electrical_angle_rad.sin());
+        let cos_angle = I16F16::from_num(self.electrical_angle_rad.cos());
+        let two_phase_setpoint = foc::park_clarke::inverse_park(cos_angle, sin_angle, dq);
+        self.two_phase_setpoint = pos2(
+            two_phase_setpoint.beta.to_num(),
+            two_phase_setpoint.alpha.to_num(),
+        );
+
+        self.three_phase_setpoint =
+            foc::pwm::SpaceVector::modulate(two_phase_setpoint).map(|v| v.to_num());
+    }
 }
 
 impl egui_tiles::Behavior<Pane> for Behaviour {
@@ -47,21 +77,18 @@ impl egui_tiles::Behavior<Pane> for Behaviour {
                     });
                 };
 
-                ui.label("RTT");
-                ui.group(|ui| {
-                    // TODO: Read list of RTT devices
-                    display_connection(ui, "Device 0");
-                    display_connection(ui, "Device 1");
-                    display_connection(ui, "Device 2");
-                });
                 ui.label("USB");
                 ui.group(|ui| {
-                    // TODO: Read list of USB devices
-                    display_connection(ui, "Device 0");
+                    // for device in connection::list_all() {
+                    //     display_connection(
+                    //         ui,
+                    //         &format!("{} ({}:{})", device.product, device.bus, device.address),
+                    //     );
+                    // }
                 });
             }
             Pane::Graph => {
-                display_graph(ui, &mut self.rotating_setpoint);
+                display_graph(ui, &mut self.motor_state);
             }
         }
 
@@ -69,53 +96,78 @@ impl egui_tiles::Behavior<Pane> for Behaviour {
     }
 }
 
-fn display_graph(ui: &mut egui::Ui, rotating_setpoint: &mut Option<Pos2>) {
+fn display_graph(ui: &mut egui::Ui, state: &mut MotorState) {
+    let window_frame = egui::Frame::window(ui.style())
+        .shadow(Shadow::NONE)
+        .rounding(Rounding::same(2.))
+        .fill(ui.style().visuals.widgets.open.weak_bg_fill);
+
     // Draw rotating reference frame
-    egui::Window::new("Rotating Reference Frame")
+    egui::Window::new("Rotating Frame")
         .collapsible(false)
-        .fixed_pos(pos2(400., 200.))
+        .fixed_pos(ui.min_rect().left_top() + vec2(100., 100.))
         .resizable(false)
-        .frame(
-            egui::Frame::window(ui.style())
-                .shadow(Shadow::NONE)
-                .rounding(Rounding::same(2.))
-                .fill(ui.style().visuals.widgets.open.weak_bg_fill),
-        )
+        .frame(window_frame)
         .show(ui.ctx(), |ui| {
-            egui::Frame::none().inner_margin(16.).show(ui, |ui| {
-                let size = 100.;
-                let (rot_frame_resp, painter) =
-                    ui.allocate_painter(Vec2::splat(size * 2. + 2.), Sense::click_and_drag());
-                let center = rot_frame_resp.rect.center();
-
-                painter.arrow(center, vec2(size, 0.), Stroke::new(2., Color32::WHITE));
-                painter.arrow(center, vec2(0., -size), Stroke::new(2., Color32::WHITE));
-                painter.circle_stroke(center, size, (2., Color32::LIGHT_GRAY));
-
-                let dq_to_screen = vec2(size, -size);
-                if rot_frame_resp.is_pointer_button_down_on() {
-                    let screen_pos = rot_frame_resp.interact_pointer_pos().unwrap();
-                    let dq_pos = ((screen_pos - center) / dq_to_screen).normalized();
-                    *rotating_setpoint = Some(dq_pos.to_pos2());
-                }
-
-                if let Some(rotating_setpoint) = rotating_setpoint {
-                    painter.circle(
-                        center + rotating_setpoint.to_vec2() * dq_to_screen,
-                        5.,
-                        Color32::GRAY,
-                        Stroke::NONE,
-                    );
-                }
+            ui.add(widgets::VectorPlot::new(&mut state.rotating_setpoint));
+            ui.horizontal(|ui| {
+                //if let Some(rotating_setpoint) = &mut state.rotating_setpoint {
+                ui.label(format!("D: {:.3}", state.rotating_setpoint.x));
+                ui.label(format!("Q: {:.3}", state.rotating_setpoint.y));
+                //}
             });
         });
 
-    // let resp = ui.allocate_ui_at_rect(
-    //     Rect::from_min_size(space.left_top() + vec2(300., 300.), vec2(200., 200.)),
-    //     |ui| {},
-    // );
-    // let contents_rect = resp.response.rect;
-    // let painter = ui.painter_at(contents_rect.expand(10.));
+    // Draw two-phase stationary reference frame
+    egui::Window::new("Two-Phase Stationary Frame")
+        .collapsible(false)
+        .fixed_pos(ui.min_rect().left_top() + vec2(400., 100.))
+        .resizable(false)
+        .frame(window_frame)
+        .show(ui.ctx(), |ui| {
+            ui.add(widgets::VectorPlot::new(&mut state.two_phase_setpoint));
+            ui.horizontal(|ui| {
+                //if let Some(rotating_setpoint) = &mut state.rotating_setpoint {
+                ui.label(format!("Alpha: {:.3}", state.two_phase_setpoint.y));
+                ui.label(format!("Beta: {:.3}", state.two_phase_setpoint.x));
+                //}
+            });
+        });
+
+    // Draw three-phase stationary reference frame
+    egui::Window::new("Three-Phase Stationary Frame")
+        .collapsible(false)
+        .fixed_pos(ui.min_rect().left_top() + vec2(700., 100.))
+        .resizable(false)
+        .frame(window_frame)
+        .show(ui.ctx(), |ui| {
+            ui.add(widgets::ThreePhaseArrowPlot::new(
+                &mut state.three_phase_setpoint,
+            ));
+            ui.horizontal(|ui| {
+                ui.label(format!("A: {:.3}", state.three_phase_setpoint[0]));
+                ui.label(format!("B: {:.3}", state.three_phase_setpoint[1]));
+                ui.label(format!("C: {:.3}", state.three_phase_setpoint[2]));
+            });
+        });
+
+    // Draw electrical angle
+    egui::Window::new("Electrical Angle")
+        .collapsible(false)
+        .fixed_pos(ui.min_rect().left_top() + vec2(400., 400.))
+        .resizable(false)
+        .frame(window_frame)
+        .show(ui.ctx(), |ui| {
+            ui.add(widgets::AnglePlot::new(&mut state.electrical_angle_rad));
+            ui.horizontal(|ui| {
+                //if let Some(electrical_angle_rad) = &mut state.electrical_angle_rad {
+                ui.label(format!(
+                    "Angle: {:.3}°",
+                    state.electrical_angle_rad.to_degrees()
+                ));
+                //}
+            });
+        });
 }
 
 fn main() -> Result<(), eframe::Error> {
@@ -123,7 +175,6 @@ fn main() -> Result<(), eframe::Error> {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 720.0]),
-        follow_system_theme: false,
         ..Default::default()
     };
 
@@ -145,11 +196,21 @@ fn main() -> Result<(), eframe::Error> {
     let mut tree = egui_tiles::Tree::new("tree", root, tiles);
 
     let mut behavior = Behaviour {
-        rotating_setpoint: None,
+        motor_state: MotorState {
+            rotating_setpoint: Pos2::ZERO,
+            two_phase_setpoint: Pos2::ZERO,
+            three_phase_setpoint: [0.; 3],
+            electrical_angle_rad: 0.,
+        },
     };
 
     eframe::run_simple_native("FOC Remote Tuner", options, move |ctx, _frame| {
+        // Force dark theme
         ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(egui::SystemTheme::Dark));
+        ctx.options_mut(|options| options.theme_preference = egui::ThemePreference::Dark);
+
+        behavior.motor_state.update();
+
         egui::CentralPanel::default().show(ctx, |ui| {
             tree.ui(&mut behavior, ui);
         });

@@ -1,0 +1,14 @@
+[package]
+name = "firmware"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+panic-rtt-target = "0.1.3"
+rtic = { version = "2.1.1", features = ["thumbv7-backend"] }
+rtt-target = "0.5.0"
+stm32f1xx-hal = { version = "0.10.0", features = ["stm32f103"] }
+usb-device = "0.2.9"
+usbd-microsoft-os = "0.1.0"
+usbd-serial = "0.1.1"
