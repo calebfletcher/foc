@@ -8,6 +8,7 @@ cobs = { version = "0.2.3", default-features = false }
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 defmt = "0.3.10"
 defmt-rtt = "0.4.1"
+fixed = "1.28.0"
 icd = { version = "0.1.0", path = "../icd" }
 panic-rtt-target = "0.2.0"
 postcard = "1.1.1"

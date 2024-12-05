@@ -57,6 +57,10 @@ impl Device {
     pub fn write_value(&mut self, value: u32) -> Result<(), anyhow::Error> {
         self.rpc_channel.call::<icd::WriteEndpoint>(value)
     }
+
+    pub fn sin_cos(&mut self, value: f32) -> Result<(f32, f32), anyhow::Error> {
+        self.rpc_channel.call::<icd::SinCosEndpoint>(value)
+    }
 }
 
 struct RpcChannel {
