@@ -2,6 +2,7 @@
 name = "gui"
 version = "0.1.0"
 edition = "2021"
+default-run = "gui"
 
 [dependencies]
 eframe = "0.29.1"
@@ -9,6 +10,12 @@ egui = "0.29.1"
 egui_tiles = "0.10.1"
 env_logger = "0.11.3"
 log = "0.4.21"
-nusb = "0.1.9"
 foc = { path = "../../" }
 fixed = { version = "1.28.0", features = ["std"] }
+probe-rs = "0.24.0"
+anyhow = "1.0.93"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+cobs = "0.2.3"
+serde = "1.0.215"
+postcard = { version = "1.1.1", features = ["use-std"] }
+icd = { version = "0.1.0", path = "../icd" }

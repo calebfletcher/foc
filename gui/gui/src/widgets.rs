@@ -40,7 +40,7 @@ impl<'a> VectorPlot<'a> {
     }
 }
 
-impl<'a> egui::Widget for VectorPlot<'a> {
+impl egui::Widget for VectorPlot<'_> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         let (rot_frame_resp, painter) =
             ui.allocate_painter(Vec2::splat(self.size * 2. + 16.), Sense::click_and_drag());
@@ -110,7 +110,7 @@ impl<'a> AnglePlot<'a> {
     }
 }
 
-impl<'a> egui::Widget for AnglePlot<'a> {
+impl egui::Widget for AnglePlot<'_> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         let (rot_frame_resp, painter) =
             ui.allocate_painter(Vec2::splat(self.size * 2. + 16.), Sense::click_and_drag());
@@ -156,7 +156,7 @@ impl<'a> ThreePhaseArrowPlot<'a> {
     }
 }
 
-impl<'a> egui::Widget for ThreePhaseArrowPlot<'a> {
+impl egui::Widget for ThreePhaseArrowPlot<'_> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         let (rot_frame_resp, painter) =
             ui.allocate_painter(Vec2::splat(self.size * 2. + 16.), Sense::click_and_drag());

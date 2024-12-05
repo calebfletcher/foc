@@ -1,9 +1,113 @@
-#[derive(Debug)]
-pub struct Device {
-    pub product: String,
-    pub bus: u8,
-    pub address: u8,
+use anyhow::bail;
+use cobs::CobsDecoder;
+use probe_rs::{
+    probe::{list::Lister, DebugProbeInfo},
+    rtt::{DownChannel, Rtt, ScanRegion, UpChannel},
+    Permissions, Session,
+};
+use serde::{Deserialize, Serialize};
+
+pub fn list_all() -> Vec<DebugProbeInfo> {
+    let lister = Lister::new();
+    lister.list_all()
 }
 
-#[derive(Debug)]
-pub struct State {}
+pub struct Device {
+    pub probe_info: DebugProbeInfo,
+    rpc_channel: RpcChannel,
+}
+
+impl Device {
+    pub fn from_probe_info(probe_info: DebugProbeInfo) -> Result<Self, anyhow::Error> {
+        let probe = probe_info.open()?;
+        let session = probe.attach("STM32F103C8", Permissions::default())?;
+        Self::from_session(session, probe_info)
+    }
+
+    pub fn from_session(
+        mut session: Session,
+        probe_info: DebugProbeInfo,
+    ) -> Result<Self, anyhow::Error> {
+        let memory_map = session.target().memory_map.clone();
+        let mut core = session.core(0)?;
+
+        // TODO: why does the autoscan not seem to work?
+        let mut rtt = Rtt::attach_region(&mut core, &memory_map, &ScanRegion::Exact(0x20004794))?;
+        drop(core);
+
+        let rpc_channel = RpcChannel {
+            session,
+            down_channel: rtt.down_channels().take(0).unwrap(),
+            up_channel: rtt.up_channels().take(0).unwrap(),
+        };
+        Ok(Self {
+            rpc_channel,
+            probe_info,
+        })
+    }
+
+    pub fn ping(&mut self) -> Result<(), anyhow::Error> {
+        self.rpc_channel.call::<icd::PingEndpoint>(())
+    }
+
+    pub fn read_value(&mut self) -> Result<u32, anyhow::Error> {
+        self.rpc_channel.call::<icd::ReadEndpoint>(())
+    }
+
+    pub fn write_value(&mut self, value: u32) -> Result<(), anyhow::Error> {
+        self.rpc_channel.call::<icd::WriteEndpoint>(value)
+    }
+}
+
+struct RpcChannel {
+    session: Session,
+    down_channel: DownChannel,
+    up_channel: UpChannel,
+}
+
+impl RpcChannel {
+    fn call<E: icd::Endpoint>(&mut self, req: E::Request) -> Result<E::Response, anyhow::Error> {
+        let mut core = self.session.core(0)?;
+        self.down_channel.write(
+            &mut core,
+            &postcard::to_stdvec_cobs(&Frame {
+                endpoint: E::ID,
+                msg: req,
+            })?,
+        )?;
+        loop {
+            let mut rx_buffer_raw = [0; 64];
+            let mut rx_buffer_frame = [0; 64];
+            let mut decoder = CobsDecoder::new(&mut rx_buffer_frame);
+
+            let bytes_read = self.up_channel.read(&mut core, &mut rx_buffer_raw)?;
+            for byte in &rx_buffer_raw[..bytes_read] {
+                match decoder.feed(*byte) {
+                    Ok(Some(decoded_size)) => {
+                        // Handle received frame
+                        let frame_bytes = &rx_buffer_frame[..decoded_size];
+                        let frame = postcard::from_bytes::<Frame<E::Response>>(frame_bytes)?;
+                        if frame.endpoint != E::ID {
+                            bail!("incorrect response endpoint");
+                        }
+                        return Ok(frame.msg);
+                    }
+                    Ok(None) => {
+                        // not a full packet
+                        continue;
+                    }
+                    Err(_count) => {
+                        // decode error
+                        continue;
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct Frame<T> {
+    endpoint: u8,
+    msg: T,
+}

@@ -1,3 +1,0 @@
-[workspace]
-members = ["gui", "icd", "firmware"]
-resolver = "2"

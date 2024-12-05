@@ -1,9 +1,14 @@
-use std::{f32::consts::TAU, time::Instant};
+use std::{
+    f32::consts::TAU,
+    time::{Duration, Instant},
+};
 
-use egui::{epaint::Shadow, pos2, vec2, Align, Layout, Pos2, Rounding};
+use connection::Device;
+use egui::{epaint::Shadow, pos2, vec2, Align, DragValue, Layout, Pos2, Rounding};
 use egui_tiles::{Container, Linear, LinearDir};
 use fixed::types::I16F16;
 use foc::pwm::Modulation as _;
+use probe_rs::probe::DebugProbeInfo;
 
 mod connection;
 mod widgets;
@@ -15,6 +20,22 @@ enum Pane {
 
 struct Behaviour {
     motor_state: MotorState,
+    probes: Vec<DebugProbeInfo>,
+    last_probe_check_time: Option<Instant>,
+    device: Option<Device>,
+    status_label: Option<String>,
+    value_to_write: u32,
+}
+
+impl Behaviour {
+    fn update_probe_list(&mut self) {
+        if self
+            .last_probe_check_time
+            .is_none_or(|last| last.elapsed() >= Duration::from_secs(1))
+        {
+            self.probes = connection::list_all();
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -94,34 +115,86 @@ impl egui_tiles::Behavior<Pane> for Behaviour {
     ) -> egui_tiles::UiResponse {
         match pane {
             Pane::Connections => {
-                let display_connection = |ui: &mut egui::Ui, connection: &str| {
-                    ui.horizontal(|ui| {
-                        ui.label(connection);
-                        ui.allocate_ui_with_layout(
-                            ui.available_size_before_wrap()
-                                - egui::Vec2 {
-                                    x: ui.spacing().item_spacing.x,
-                                    y: 0.,
+                let display_connection =
+                    |ui: &mut egui::Ui, device: &DebugProbeInfo, active: bool| -> Option<bool> {
+                        ui.horizontal(|ui| {
+                            ui.label(&device.identifier);
+                            ui.allocate_ui_with_layout(
+                                ui.available_size_before_wrap()
+                                    - egui::Vec2 {
+                                        x: ui.spacing().item_spacing.x,
+                                        y: 0.,
+                                    },
+                                Layout::right_to_left(Align::TOP),
+                                |ui| {
+                                    if active {
+                                        if ui.button("Disconnect").clicked() {
+                                            return Some(false);
+                                        }
+                                    } else if ui.button("Connect").clicked() {
+                                        return Some(true);
+                                    }
+                                    None
                                 },
-                            Layout::right_to_left(Align::TOP),
-                            |ui| {
-                                if ui.button("Connect").clicked() {
-                                    println!("connect");
-                                }
-                            },
-                        );
-                    });
-                };
+                            )
+                        })
+                        .inner
+                        .inner
+                    };
 
                 ui.label("USB");
-                ui.group(|ui| {
-                    // for device in connection::list_all() {
-                    //     display_connection(
-                    //         ui,
-                    //         &format!("{} ({}:{})", device.product, device.bus, device.address),
-                    //     );
-                    // }
-                });
+                if self.probes.is_empty() {
+                    ui.label("No devices found");
+                } else {
+                    ui.group(|ui| {
+                        for device in &self.probes {
+                            let should_connect = display_connection(
+                                ui,
+                                device,
+                                self.device
+                                    .as_ref()
+                                    .is_some_and(|d| d.probe_info == *device),
+                            );
+                            match should_connect {
+                                Some(true) => {
+                                    // Connect
+                                    match connection::Device::from_probe_info(device.clone()) {
+                                        Ok(device) => self.device = Some(device),
+                                        Err(e) => {
+                                            self.status_label = Some(e.to_string());
+                                        }
+                                    };
+                                }
+                                Some(false) => {
+                                    // Disconnect
+                                    self.device = None;
+                                }
+                                None => {
+                                    // Nothing
+                                }
+                            }
+                        }
+                    });
+                }
+
+                if let Some(device) = &mut self.device {
+                    ui.group(|ui| {
+                        if ui.button("Ping").clicked() {
+                            if let Err(e) = device.ping() {
+                                self.status_label = Some(e.to_string());
+                            }
+                        }
+                        ui.horizontal(|ui| {
+                            ui.add(DragValue::new(&mut self.value_to_write));
+                            if ui.button("Read").clicked() {
+                                self.value_to_write = device.read_value().unwrap();
+                            }
+                            if ui.button("Write").clicked() {
+                                device.write_value(self.value_to_write).unwrap();
+                            }
+                        });
+                    });
+                }
             }
             Pane::Graph => {
                 display_graph(ui, &mut self.motor_state);
@@ -241,13 +314,20 @@ fn main() -> Result<(), eframe::Error> {
             last_time: Instant::now(),
             modulation: Modulation::SpaceVector,
         },
+        probes: Vec::new(),
+        last_probe_check_time: None,
+        device: None,
+        status_label: None,
+        value_to_write: 0,
     };
+    behavior.update_probe_list();
 
     eframe::run_simple_native("FOC Remote Tuner", options, move |ctx, _frame| {
         // Force dark theme
         ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(egui::SystemTheme::Dark));
         ctx.options_mut(|options| options.theme_preference = egui::ThemePreference::Dark);
 
+        behavior.update_probe_list();
         behavior.motor_state.update();
 
         egui::CentralPanel::default().show(ctx, |ui| {

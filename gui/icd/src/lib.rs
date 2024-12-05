@@ -1,16 +1,53 @@
 #![no_std]
 
-use postcard::experimental::schema::Schema;
-use postcard_rpc::endpoint;
 use serde::{Deserialize, Serialize};
 
-endpoint!(PingEndpoint, u32, u32, "ping");
-
-endpoint!(WriteValueEndpoint, u32, (), "value/write");
-endpoint!(ReadValueEndpoint, (), State, "value/read");
-
-#[derive(Debug, PartialEq, Serialize, Deserialize, Schema)]
-pub struct State {
-    pub value: u32,
-    pub times_written: u32,
+pub trait Endpoint {
+    const ID: u8;
+    type Request: Serialize + for<'a> Deserialize<'a>;
+    type Response: Serialize + for<'a> Deserialize<'a>;
 }
+
+#[allow(unused)]
+struct IdCheck;
+#[allow(unused)]
+trait DuplicateEndpointDetected<const ID: u8> {}
+
+macro_rules! endpoint {
+    ($id: literal, $name: ident, $req: ty, $resp: ty) => {
+        pub struct $name;
+        impl Endpoint for $name {
+            const ID: u8 = $id;
+            type Request = $req;
+            type Response = $resp;
+        }
+        impl DuplicateEndpointDetected<$id> for IdCheck {}
+    };
+}
+
+#[macro_export]
+macro_rules! generate_endpoint_handler {
+    ($frame: ident, $tx_buffer: ident, $(($name: path, $handler: expr))+) => {
+        match $frame[0] {
+            $(
+                <$name>::ID => {
+                    let resp = $handler(postcard::from_bytes(&$frame[1..]).unwrap());
+                    let encoded_msg = postcard::to_slice_cobs(
+                        &Frame {
+                            endpoint: $frame[0],
+                            msg: resp,
+                        },
+                        $tx_buffer,
+                    )
+                    .unwrap();
+                    Ok(encoded_msg.len())
+                }
+            )*
+            _ => Err(()),
+        }
+    };
+}
+
+endpoint!(0, PingEndpoint, (), ());
+endpoint!(1, ReadEndpoint, (), u32);
+endpoint!(2, WriteEndpoint, u32, ());

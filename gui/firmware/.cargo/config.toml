@@ -1,4 +1,7 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
 runner = "probe-rs run --chip stm32f103c8 "
 linker = "flip-link"
-rustflags = ["-C", "link-arg=-Tlink.x"]
+rustflags = ["-Clink-arg=-Tlink.x"]
+
+[build]
+target = "thumbv7m-none-eabi"
