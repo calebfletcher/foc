@@ -13,9 +13,17 @@ pub struct RpcChannel {
 #[rtic::app(device = stm32g4xx_hal::stm32, dispatchers = [SPI1])]
 mod app {
     use cobs::CobsDecoder;
+    use fixed::types::I1F31;
     use icd::Endpoint;
     use rtt_target::{rtt_init, ChannelMode};
     use stm32g4xx_hal::{
+        cordic::{
+            self,
+            func::dynamic::{Any, Mode as _},
+            prec::P20,
+            types::Q31,
+            Cordic, Ext,
+        },
         gpio::{gpioc::PC15, Output, PushPull},
         prelude::*,
         pwr::PwrExt as _,
@@ -26,6 +34,8 @@ mod app {
 
     use crate::RpcChannel;
 
+    type DynamicCordic = Cordic<Q31, Q31, Any, P20>;
+
     #[shared]
     struct Shared {}
 
@@ -34,6 +44,7 @@ mod app {
         rpc_channel: RpcChannel,
         led: PC15<Output<PushPull>>,
         timer_handler: CountDownTimer<stm32g4xx_hal::stm32::TIM2>,
+        cordic: DynamicCordic,
     }
 
     #[init]
@@ -63,6 +74,8 @@ mod app {
         let pwr = cx.device.PWR.constrain().freeze();
         let mut rcc = cx.device.RCC.freeze(Config::hsi(), pwr);
 
+        let cordic = cx.device.CORDIC.constrain(&mut rcc).into_dynamic();
+
         let gpioc = cx.device.GPIOC.split(&mut rcc);
         let led = gpioc.pc15.into_push_pull_output();
 
@@ -79,6 +92,7 @@ mod app {
                 rpc_channel,
                 led,
                 timer_handler: timer2,
+                cordic,
             },
         )
     }
@@ -95,7 +109,7 @@ mod app {
         cx.local.timer_handler.clear_interrupt(Event::TimeOut);
     }
 
-    #[task(local = [rpc_channel])]
+    #[task(local = [rpc_channel, cordic])]
     async fn rtt_rpc(cx: rtt_rpc::Context) {
         let mut rx_buffer_raw = [0; 64];
         let mut rx_buffer_frame = [0; 64];
@@ -121,6 +135,10 @@ mod app {
                 (icd::PingEndpoint, ping)
                 (icd::ReadEndpoint, |_: ()| -> u32 { stored_value })
                 (icd::WriteEndpoint, |value: u32| { stored_value = value; })
+                (icd::SinCosEndpoint, |value: f32| {
+                    let (sin, cos) = cx.local.cordic.run::<cordic::func::SinCos>(I1F31::from_num(value));
+                    (sin.to_num::<f32>(), cos.to_num::<f32>())
+                })
             }
         };
 

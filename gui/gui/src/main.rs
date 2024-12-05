@@ -25,6 +25,8 @@ struct Behaviour {
     device: Option<Device>,
     status_label: Option<String>,
     value_to_write: u32,
+    angle: f32,
+    sin_cos: Option<(f32, f32)>,
 }
 
 impl Behaviour {
@@ -193,6 +195,17 @@ impl egui_tiles::Behavior<Pane> for Behaviour {
                                 device.write_value(self.value_to_write).unwrap();
                             }
                         });
+                        ui.horizontal(|ui| {
+                            if ui.drag_angle(&mut self.angle).changed() {
+                                let angle = self.angle / std::f32::consts::PI;
+                                let (sin, cos) = device.sin_cos(angle).unwrap();
+                                self.sin_cos = Some((sin, cos));
+                            };
+                            if let Some((sin, cos)) = self.sin_cos {
+                                ui.label(format!("Sin: {sin:.3}"));
+                                ui.label(format!("Cos: {cos:.3}"));
+                            }
+                        });
                     });
                 }
 
@@ -325,6 +338,8 @@ fn main() -> Result<(), eframe::Error> {
         device: None,
         status_label: None,
         value_to_write: 0,
+        angle: 0.,
+        sin_cos: None,
     };
     behavior.update_probe_list();
 
