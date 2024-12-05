@@ -12,8 +12,8 @@ env_logger = "0.11.3"
 log = "0.4.21"
 foc = { path = "../../" }
 fixed = { version = "1.28.0", features = ["std"] }
-probe-rs = "0.24.0"
-anyhow = "1.0.93"
+probe-rs = { version = "0.24.0", git = "https://github.com/probe-rs/probe-rs.git" }
+anyhow = "1.0.94"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 cobs = "0.2.3"
 serde = "1.0.215"

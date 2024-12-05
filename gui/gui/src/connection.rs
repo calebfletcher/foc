@@ -2,7 +2,7 @@ use anyhow::bail;
 use cobs::CobsDecoder;
 use probe_rs::{
     probe::{list::Lister, DebugProbeInfo},
-    rtt::{DownChannel, Rtt, ScanRegion, UpChannel},
+    rtt::{DownChannel, Rtt, UpChannel},
     Permissions, Session,
 };
 use serde::{Deserialize, Serialize};
@@ -28,17 +28,12 @@ impl Device {
         mut session: Session,
         probe_info: DebugProbeInfo,
     ) -> Result<Self, anyhow::Error> {
-        let memory_map = session.target().memory_map.clone();
-        let mut core = session.core(0)?;
-
-        // TODO: why does the autoscan not seem to work?
-        let mut rtt = Rtt::attach_region(&mut core, &memory_map, &ScanRegion::Exact(0x2000778C))?;
-        drop(core);
+        let mut rtt = Rtt::attach(&mut session.core(0)?)?;
 
         let rpc_channel = RpcChannel {
             session,
-            down_channel: rtt.down_channels().take(0).unwrap(),
-            up_channel: rtt.up_channels().take(0).unwrap(),
+            down_channel: rtt.down_channels.swap_remove(0),
+            up_channel: rtt.up_channels.swap_remove(0),
         };
         Ok(Self {
             rpc_channel,
