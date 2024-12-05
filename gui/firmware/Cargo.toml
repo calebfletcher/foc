@@ -12,6 +12,11 @@ icd = { version = "0.1.0", path = "../icd" }
 panic-rtt-target = "0.2.0"
 postcard = "1.1.1"
 rtic = { version = "2.1.1", features = ["thumbv7-backend"] }
-rtt-target = "0.6.0"
+rtic-monotonics = { version = "2.0.3", features = ["stm32_tim2", "stm32g474ve"] }
+rtt-target = "0.6.1"
 serde = { version = "1.0.215", default-features = false }
-stm32f1xx-hal = { version = "0.10.0", features = ["stm32f103"] }
+stm32g4xx-hal = { git = "https://github.com/stm32-rs/stm32g4xx-hal.git", version = "0.0.2", features = [
+    "cordic",
+    "stm32g474",
+] }
+#stm32f1xx-hal = { version = "0.10.0", features = ["stm32f103"] }

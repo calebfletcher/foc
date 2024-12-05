@@ -4,7 +4,7 @@ use std::{
 };
 
 use connection::Device;
-use egui::{epaint::Shadow, pos2, vec2, Align, DragValue, Layout, Pos2, Rounding};
+use egui::{epaint::Shadow, pos2, vec2, Align, DragValue, Layout, Pos2, RichText, Rounding};
 use egui_tiles::{Container, Linear, LinearDir};
 use fixed::types::I16F16;
 use foc::pwm::Modulation as _;
@@ -193,6 +193,12 @@ impl egui_tiles::Behavior<Pane> for Behaviour {
                                 device.write_value(self.value_to_write).unwrap();
                             }
                         });
+                    });
+                }
+
+                if let Some(msg) = self.status_label.as_ref() {
+                    ui.with_layout(Layout::bottom_up(egui::Align::TOP), |ui| {
+                        ui.label(RichText::new(msg).small().color(ui.visuals().warn_fg_color))
                     });
                 }
             }

@@ -20,7 +20,7 @@ pub struct Device {
 impl Device {
     pub fn from_probe_info(probe_info: DebugProbeInfo) -> Result<Self, anyhow::Error> {
         let probe = probe_info.open()?;
-        let session = probe.attach("STM32F103C8", Permissions::default())?;
+        let session = probe.attach("STM32G474VETx", Permissions::default())?;
         Self::from_session(session, probe_info)
     }
 
@@ -32,7 +32,7 @@ impl Device {
         let mut core = session.core(0)?;
 
         // TODO: why does the autoscan not seem to work?
-        let mut rtt = Rtt::attach_region(&mut core, &memory_map, &ScanRegion::Exact(0x20004794))?;
+        let mut rtt = Rtt::attach_region(&mut core, &memory_map, &ScanRegion::Exact(0x2000778C))?;
         drop(core);
 
         let rpc_channel = RpcChannel {

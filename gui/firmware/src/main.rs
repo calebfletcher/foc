@@ -10,16 +10,18 @@ pub struct RpcChannel {
     down: DownChannel,
 }
 
-#[rtic::app(device = stm32f1xx_hal::pac, dispatchers = [SPI1])]
+#[rtic::app(device = stm32g4xx_hal::stm32, dispatchers = [SPI1])]
 mod app {
     use cobs::CobsDecoder;
     use icd::Endpoint;
     use rtt_target::{rtt_init, ChannelMode};
-    use stm32f1xx_hal::{
-        gpio::{Output, PinState, PushPull, PC13},
-        pac,
+    use stm32g4xx_hal::{
+        gpio::{gpioc::PC15, Output, PushPull},
         prelude::*,
-        timer::{CounterMs, Event},
+        pwr::PwrExt as _,
+        rcc::Config,
+        time::ExtU32 as _,
+        timer::{CountDownTimer, Event, Timer},
     };
 
     use crate::RpcChannel;
@@ -30,8 +32,8 @@ mod app {
     #[local]
     struct Local {
         rpc_channel: RpcChannel,
-        led: PC13<Output<PushPull>>,
-        timer_handler: CounterMs<pac::TIM1>,
+        led: PC15<Output<PushPull>>,
+        timer_handler: CountDownTimer<stm32g4xx_hal::stm32::TIM2>,
     }
 
     #[init]
@@ -58,26 +60,16 @@ mod app {
             down: channels.down.0,
         };
 
-        let mut flash = cx.device.FLASH.constrain();
-        let rcc = cx.device.RCC.constrain();
+        let pwr = cx.device.PWR.constrain().freeze();
+        let mut rcc = cx.device.RCC.freeze(Config::hsi(), pwr);
 
-        // let clocks = rcc
-        //     .cfgr
-        //     .use_hse(8.MHz())
-        //     .sysclk(48.MHz())
-        //     .pclk1(24.MHz())
-        //     .freeze(&mut flash.acr);
+        let gpioc = cx.device.GPIOC.split(&mut rcc);
+        let led = gpioc.pc15.into_push_pull_output();
 
-        let clocks = rcc.cfgr.freeze(&mut flash.acr);
-        let mut gpioc = cx.device.GPIOC.split();
-        let led = gpioc
-            .pc13
-            .into_push_pull_output_with_state(&mut gpioc.crh, PinState::High);
-
-        // Configure the syst timer to trigger an update every second and enables interrupt
-        let mut timer = cx.device.TIM1.counter_ms(&clocks);
-        timer.start(1.secs()).unwrap();
-        timer.listen(Event::Update);
+        let timer2 = Timer::new(cx.device.TIM2, &rcc.clocks);
+        let mut timer2 = timer2.start_count_down(1000u32.millis());
+        timer2.clear_interrupt(Event::TimeOut);
+        timer2.listen(Event::TimeOut);
 
         rtt_rpc::spawn().unwrap();
 
@@ -86,21 +78,21 @@ mod app {
             Local {
                 rpc_channel,
                 led,
-                timer_handler: timer,
+                timer_handler: timer2,
             },
         )
     }
 
-    #[task(binds = TIM1_UP, priority = 1, local = [led, timer_handler, led_state: bool = false])]
+    #[task(binds = TIM2, priority = 1, local = [led, timer_handler, led_state: bool = false])]
     fn tick(cx: tick::Context) {
         if *cx.local.led_state {
-            cx.local.led.set_high();
+            let _ = cx.local.led.set_high();
             *cx.local.led_state = false;
         } else {
-            cx.local.led.set_low();
+            let _ = cx.local.led.set_low();
             *cx.local.led_state = true;
         }
-        cx.local.timer_handler.clear_interrupt(Event::Update);
+        cx.local.timer_handler.clear_interrupt(Event::TimeOut);
     }
 
     #[task(local = [rpc_channel])]
