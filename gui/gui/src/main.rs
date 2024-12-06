@@ -52,7 +52,7 @@ impl Behaviour {
                 return;
             };
 
-            self.motor_state.electrical_angle_rad =
+            self.motor_state.mechanical_angle_rad =
                 device.encoder_angle().unwrap() as f32 / 2f32.powi(14);
         }
     }
@@ -70,6 +70,7 @@ struct MotorState {
     rotating_setpoint: Pos2,
     two_phase_setpoint: Pos2,
     three_phase_setpoint: [f32; 3],
+    mechanical_angle_rad: f32,
     electrical_angle_rad: f32,
     angular_vel_radps: f32,
     last_time: Instant,
@@ -299,6 +300,22 @@ fn display_graph(ui: &mut egui::Ui, state: &mut MotorState) {
             });
         });
 
+    // Draw mechanical angle
+    egui::Window::new("Mechanical Angle")
+        .collapsible(false)
+        .fixed_pos(ui.min_rect().left_top() + vec2(100., 400.))
+        .resizable(false)
+        .frame(window_frame)
+        .show(ui.ctx(), |ui| {
+            ui.add(widgets::AnglePlot::new(&mut state.mechanical_angle_rad).settable(false));
+            ui.horizontal(|ui| {
+                ui.label(format!(
+                    "Angle: {:.3}°",
+                    state.mechanical_angle_rad.to_degrees()
+                ));
+            });
+        });
+
     // Draw electrical angle
     egui::Window::new("Electrical Angle")
         .collapsible(false)
@@ -346,6 +363,7 @@ fn main() -> Result<(), eframe::Error> {
             rotating_setpoint: Pos2::ZERO,
             two_phase_setpoint: Pos2::ZERO,
             three_phase_setpoint: [0.; 3],
+            mechanical_angle_rad: 0.,
             electrical_angle_rad: 0.,
             angular_vel_radps: 0.,
             last_time: Instant::now(),
