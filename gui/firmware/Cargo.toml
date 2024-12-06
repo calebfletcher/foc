@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+as5048a = "0.2.1"
 cobs = { version = "0.2.3", default-features = false }
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 defmt = "0.3.10"

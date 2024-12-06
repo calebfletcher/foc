@@ -52,3 +52,4 @@ endpoint!(0, PingEndpoint, (), ());
 endpoint!(1, ReadEndpoint, (), u32);
 endpoint!(2, WriteEndpoint, u32, ());
 endpoint!(3, SinCosEndpoint, f32, (f32, f32));
+endpoint!(4, EncoderAngle, (), u16);

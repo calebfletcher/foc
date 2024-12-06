@@ -12,6 +12,7 @@ pub struct RpcChannel {
 
 #[rtic::app(device = stm32g4xx_hal::stm32, dispatchers = [SPI1])]
 mod app {
+    use as5048a::AS5048A;
     use cobs::CobsDecoder;
     use fixed::types::I1F31;
     use icd::Endpoint;
@@ -24,17 +25,30 @@ mod app {
             types::Q31,
             Cordic, Ext,
         },
-        gpio::{gpioc::PC15, Output, PushPull},
-        prelude::*,
+        gpio::{
+            gpioc::{PC10, PC11, PC12, PC15, PC9},
+            Alternate, GpioExt as _, Output, PushPull, AF6,
+        },
+        prelude::OutputPin as _,
         pwr::PwrExt as _,
-        rcc::Config,
-        time::ExtU32 as _,
+        rcc::{Config, PllMDiv, PllNMul, PllRDiv, PllSrc, RccExt as _},
+        spi::{Spi, SpiExt as _},
+        stm32::SPI3,
+        time::{ExtU32 as _, RateExtU32 as _},
         timer::{CountDownTimer, Event, Timer},
     };
 
     use crate::RpcChannel;
 
     type DynamicCordic = Cordic<Q31, Q31, Any, P20>;
+    type EncoderSpi = Spi<
+        SPI3,
+        (
+            PC10<Alternate<AF6>>,
+            PC11<Alternate<AF6>>,
+            PC12<Alternate<AF6>>,
+        ),
+    >;
 
     #[shared]
     struct Shared {}
@@ -45,6 +59,7 @@ mod app {
         led: PC15<Output<PushPull>>,
         timer_handler: CountDownTimer<stm32g4xx_hal::stm32::TIM2>,
         cordic: DynamicCordic,
+        encoder: AS5048A<EncoderSpi, PC9<Output<PushPull>>>,
     }
 
     #[init]
@@ -72,11 +87,40 @@ mod app {
         };
 
         let pwr = cx.device.PWR.constrain().freeze();
-        let mut rcc = cx.device.RCC.freeze(Config::hsi(), pwr);
+        let mut rcc = cx.device.RCC.freeze(
+            Config::pll().pll_cfg(stm32g4xx_hal::rcc::PllConfig {
+                mux: PllSrc::HSI,
+                m: PllMDiv::DIV_1,
+                n: PllNMul::MUL_18,
+                r: Some(PllRDiv::DIV_2),
+                q: None,
+                p: None,
+            }),
+            pwr,
+        );
 
         let cordic = cx.device.CORDIC.constrain(&mut rcc).into_dynamic();
 
         let gpioc = cx.device.GPIOC.split(&mut rcc);
+
+        let cs0 = gpioc.pc9.into_push_pull_output();
+        //let cs1 = gpioc.pc8.into_push_pull_output();
+        let sclk = gpioc.pc10.into_alternate::<AF6>();
+        let miso = gpioc.pc11.into_alternate::<AF6>();
+        let mosi = gpioc.pc12.into_alternate::<AF6>();
+
+        let spi = cx.device.SPI3.spi(
+            (sclk, miso, mosi),
+            stm32g4xx_hal::spi::Mode {
+                polarity: stm32g4xx_hal::spi::Polarity::IdleHigh,
+                phase: stm32g4xx_hal::spi::Phase::CaptureOnFirstTransition,
+            },
+            1u32.MHz(),
+            &mut rcc,
+        );
+
+        let encoder = AS5048A::new(spi, cs0);
+
         let led = gpioc.pc15.into_push_pull_output();
 
         let timer2 = Timer::new(cx.device.TIM2, &rcc.clocks);
@@ -93,6 +137,7 @@ mod app {
                 led,
                 timer_handler: timer2,
                 cordic,
+                encoder,
             },
         )
     }
@@ -109,7 +154,7 @@ mod app {
         cx.local.timer_handler.clear_interrupt(Event::TimeOut);
     }
 
-    #[task(local = [rpc_channel, cordic])]
+    #[task(local = [rpc_channel, cordic, encoder])]
     async fn rtt_rpc(cx: rtt_rpc::Context) {
         let mut rx_buffer_raw = [0; 64];
         let mut rx_buffer_frame = [0; 64];
@@ -138,6 +183,9 @@ mod app {
                 (icd::SinCosEndpoint, |value: f32| {
                     let (sin, cos) = cx.local.cordic.run::<cordic::func::SinCos>(I1F31::from_num(value));
                     (sin.to_num::<f32>(), cos.to_num::<f32>())
+                })
+                (icd::EncoderAngle, |_: ()| {
+                    cx.local.encoder.angle().unwrap()
                 })
             }
         };
