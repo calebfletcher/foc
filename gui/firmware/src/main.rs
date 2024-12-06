@@ -18,6 +18,10 @@ mod app {
     use icd::Endpoint;
     use rtt_target::{rtt_init, ChannelMode};
     use stm32g4xx_hal::{
+        adc::{
+            config::{AdcConfig, SampleTime},
+            Adc, AdcClaim, ClockSource, Configured,
+        },
         cordic::{
             self,
             func::dynamic::{Any, Mode as _},
@@ -25,15 +29,17 @@ mod app {
             types::Q31,
             Cordic, Ext,
         },
+        delay::SYSTDelayExt as _,
         gpio::{
+            gpioa::{PA0, PA1},
             gpioc::{PC10, PC11, PC12, PC15, PC9},
-            Alternate, GpioExt as _, Output, PushPull, AF6,
+            Alternate, Analog, GpioExt as _, Output, PushPull, AF6,
         },
         prelude::OutputPin as _,
         pwr::PwrExt as _,
         rcc::{Config, PllMDiv, PllNMul, PllRDiv, PllSrc, RccExt as _},
         spi::{Spi, SpiExt as _},
-        stm32::SPI3,
+        stm32::{ADC1, SPI3},
         time::{ExtU32 as _, RateExtU32 as _},
         timer::{CountDownTimer, Event, Timer},
     };
@@ -60,6 +66,9 @@ mod app {
         timer_handler: CountDownTimer<stm32g4xx_hal::stm32::TIM2>,
         cordic: DynamicCordic,
         encoder: AS5048A<EncoderSpi, PC9<Output<PushPull>>>,
+        motor_current_a: PA0<Analog>,
+        motor_current_b: PA1<Analog>,
+        adc: Adc<ADC1, Configured>,
     }
 
     #[init]
@@ -101,6 +110,7 @@ mod app {
 
         let cordic = cx.device.CORDIC.constrain(&mut rcc).into_dynamic();
 
+        let gpioa = cx.device.GPIOA.split(&mut rcc);
         let gpioc = cx.device.GPIOC.split(&mut rcc);
 
         let cs0 = gpioc.pc9.into_push_pull_output();
@@ -121,6 +131,17 @@ mod app {
 
         let encoder = AS5048A::new(spi, cs0);
 
+        let mut delay = cx.core.SYST.delay(&rcc.clocks);
+        let adc = cx.device.ADC1.claim_and_configure(
+            ClockSource::SystemClock,
+            &rcc,
+            AdcConfig::default(),
+            &mut delay,
+            false,
+        );
+        let motor_current_a = gpioa.pa0.into_analog();
+        let motor_current_b = gpioa.pa1.into_analog();
+
         let led = gpioc.pc15.into_push_pull_output();
 
         let timer2 = Timer::new(cx.device.TIM2, &rcc.clocks);
@@ -138,6 +159,9 @@ mod app {
                 timer_handler: timer2,
                 cordic,
                 encoder,
+                adc,
+                motor_current_a,
+                motor_current_b,
             },
         )
     }
@@ -154,7 +178,7 @@ mod app {
         cx.local.timer_handler.clear_interrupt(Event::TimeOut);
     }
 
-    #[task(local = [rpc_channel, cordic, encoder])]
+    #[task(local = [rpc_channel, cordic, encoder, adc, motor_current_a, motor_current_b])]
     async fn rtt_rpc(cx: rtt_rpc::Context) {
         let mut rx_buffer_raw = [0; 64];
         let mut rx_buffer_frame = [0; 64];
@@ -178,7 +202,7 @@ mod app {
             icd::generate_endpoint_handler! {
                 frame, tx_buffer,
                 (icd::PingEndpoint, ping)
-                (icd::ReadEndpoint, |_: ()| -> u32 { stored_value })
+                (icd::ReadEndpoint, |_: ()| { stored_value })
                 (icd::WriteEndpoint, |value: u32| { stored_value = value; })
                 (icd::SinCosEndpoint, |value: f32| {
                     let (sin, cos) = cx.local.cordic.run::<cordic::func::SinCos>(I1F31::from_num(value));
@@ -186,6 +210,13 @@ mod app {
                 })
                 (icd::EncoderAngle, |_: ()| {
                     cx.local.encoder.angle().unwrap()
+                })
+                (icd::MotorPhaseCurrents, |_: ()| {
+                    let current_a_raw = cx.local.adc.convert(cx.local.motor_current_a, SampleTime::Cycles_640_5);
+                    let current_a_mv = cx.local.adc.sample_to_millivolts(current_a_raw);
+                    let current_b_raw = cx.local.adc.convert(cx.local.motor_current_b, SampleTime::Cycles_640_5);
+                    let current_b_mv = cx.local.adc.sample_to_millivolts(current_b_raw);
+                    [current_a_mv, current_b_mv]
                 })
             }
         };
