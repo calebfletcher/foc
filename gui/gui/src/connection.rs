@@ -56,6 +56,10 @@ impl Device {
     pub fn sin_cos(&mut self, value: f32) -> Result<(f32, f32), anyhow::Error> {
         self.rpc_channel.call::<icd::SinCosEndpoint>(value)
     }
+
+    pub fn encoder_angle(&mut self) -> Result<u16, anyhow::Error> {
+        self.rpc_channel.call::<icd::EncoderAngle>(())
+    }
 }
 
 struct RpcChannel {

@@ -22,6 +22,7 @@ struct Behaviour {
     motor_state: MotorState,
     probes: Vec<DebugProbeInfo>,
     last_probe_check_time: Option<Instant>,
+    last_poll_time: Option<Instant>,
     device: Option<Device>,
     status_label: Option<String>,
     value_to_write: u32,
@@ -35,7 +36,24 @@ impl Behaviour {
             .last_probe_check_time
             .is_none_or(|last| last.elapsed() >= Duration::from_secs(1))
         {
+            self.last_probe_check_time = Some(Instant::now());
+
             self.probes = connection::list_all();
+        }
+    }
+
+    fn pull_values_from_device(&mut self) {
+        if self
+            .last_poll_time
+            .is_none_or(|last| last.elapsed() >= Duration::from_millis(10))
+        {
+            self.last_poll_time = Some(Instant::now());
+            let Some(device) = self.device.as_mut() else {
+                return;
+            };
+
+            self.motor_state.electrical_angle_rad =
+                device.encoder_angle().unwrap() as f32 / 2f32.powi(14);
         }
     }
 }
@@ -335,6 +353,7 @@ fn main() -> Result<(), eframe::Error> {
         },
         probes: Vec::new(),
         last_probe_check_time: None,
+        last_poll_time: None,
         device: None,
         status_label: None,
         value_to_write: 0,
@@ -349,6 +368,7 @@ fn main() -> Result<(), eframe::Error> {
         ctx.options_mut(|options| options.theme_preference = egui::ThemePreference::Dark);
 
         behavior.update_probe_list();
+        behavior.pull_values_from_device();
         behavior.motor_state.update();
 
         egui::CentralPanel::default().show(ctx, |ui| {
