@@ -28,6 +28,7 @@ struct Behaviour {
     value_to_write: u32,
     angle: f32,
     sin_cos: Option<(f32, f32)>,
+    currents: Option<[u16; 2]>,
 }
 
 impl Behaviour {
@@ -54,6 +55,8 @@ impl Behaviour {
 
             self.motor_state.mechanical_angle_rad =
                 device.encoder_angle().unwrap() as f32 / 2f32.powi(14);
+
+            self.currents = Some(device.motor_currents().unwrap());
         }
     }
 }
@@ -225,6 +228,12 @@ impl egui_tiles::Behavior<Pane> for Behaviour {
                                 ui.label(format!("Cos: {cos:.3}"));
                             }
                         });
+                        if let Some([a, b]) = self.currents {
+                            ui.horizontal(|ui| {
+                                ui.label(format!("A: {a:.3}"));
+                                ui.label(format!("B: {b:.3}"));
+                            });
+                        }
                     });
                 }
 
@@ -377,6 +386,7 @@ fn main() -> Result<(), eframe::Error> {
         value_to_write: 0,
         angle: 0.,
         sin_cos: None,
+        currents: None,
     };
     behavior.update_probe_list();
 

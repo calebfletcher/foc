@@ -18,6 +18,10 @@ mod app {
     use icd::Endpoint;
     use rtt_target::{rtt_init, ChannelMode};
     use stm32g4xx_hal::{
+        adc::{
+            config::{Continuous, SampleTime, Sequence},
+            Adc, AdcClaim, ClockSource, Configured,
+        },
         cordic::{
             self,
             func::dynamic::{Any, Mode as _},
@@ -25,6 +29,7 @@ mod app {
             types::Q31,
             Cordic, Ext,
         },
+        delay::SYSTDelayExt as _,
         gpio::{
             gpioc::{PC10, PC11, PC12, PC15, PC9},
             Alternate, GpioExt as _, Output, PushPull, AF6,
@@ -33,7 +38,7 @@ mod app {
         pwr::PwrExt as _,
         rcc::{Config, PllMDiv, PllNMul, PllRDiv, PllSrc, RccExt as _},
         spi::{Spi, SpiExt as _},
-        stm32::SPI3,
+        stm32::{ADC1, SPI3},
         time::{ExtU32 as _, RateExtU32 as _},
         timer::{CountDownTimer, Event, Timer},
     };
@@ -60,6 +65,7 @@ mod app {
         timer_handler: CountDownTimer<stm32g4xx_hal::stm32::TIM2>,
         cordic: DynamicCordic,
         encoder: AS5048A<EncoderSpi, PC9<Output<PushPull>>>,
+        adc: Option<Adc<ADC1, Configured>>,
     }
 
     #[init]
@@ -101,6 +107,7 @@ mod app {
 
         let cordic = cx.device.CORDIC.constrain(&mut rcc).into_dynamic();
 
+        let gpioa = cx.device.GPIOA.split(&mut rcc);
         let gpioc = cx.device.GPIOC.split(&mut rcc);
 
         let cs0 = gpioc.pc9.into_push_pull_output();
@@ -121,6 +128,23 @@ mod app {
 
         let encoder = AS5048A::new(spi, cs0);
 
+        // These don't implement drop, so it should be fine to drop them but
+        // still use the ADC
+        let motor_current_a = gpioa.pa0.into_analog();
+        let motor_current_b = gpioa.pa1.into_analog();
+
+        let mut delay = cx.core.SYST.delay(&rcc.clocks);
+        let mut adc = cx
+            .device
+            .ADC1
+            .claim(ClockSource::SystemClock, &rcc, &mut delay, false);
+
+        adc.set_continuous(Continuous::Single);
+        adc.reset_sequence();
+        adc.configure_channel(&motor_current_a, Sequence::One, SampleTime::Cycles_640_5);
+        adc.configure_channel(&motor_current_b, Sequence::Two, SampleTime::Cycles_640_5);
+        let adc = adc.enable();
+
         let led = gpioc.pc15.into_push_pull_output();
 
         let timer2 = Timer::new(cx.device.TIM2, &rcc.clocks);
@@ -138,6 +162,7 @@ mod app {
                 timer_handler: timer2,
                 cordic,
                 encoder,
+                adc: Some(adc),
             },
         )
     }
@@ -154,7 +179,7 @@ mod app {
         cx.local.timer_handler.clear_interrupt(Event::TimeOut);
     }
 
-    #[task(local = [rpc_channel, cordic, encoder])]
+    #[task(local = [rpc_channel, cordic, encoder, adc])]
     async fn rtt_rpc(cx: rtt_rpc::Context) {
         let mut rx_buffer_raw = [0; 64];
         let mut rx_buffer_frame = [0; 64];
@@ -178,7 +203,7 @@ mod app {
             icd::generate_endpoint_handler! {
                 frame, tx_buffer,
                 (icd::PingEndpoint, ping)
-                (icd::ReadEndpoint, |_: ()| -> u32 { stored_value })
+                (icd::ReadEndpoint, |_: ()| { stored_value })
                 (icd::WriteEndpoint, |value: u32| { stored_value = value; })
                 (icd::SinCosEndpoint, |value: f32| {
                     let (sin, cos) = cx.local.cordic.run::<cordic::func::SinCos>(I1F31::from_num(value));
@@ -186,6 +211,18 @@ mod app {
                 })
                 (icd::EncoderAngle, |_: ()| {
                     cx.local.encoder.angle().unwrap()
+                })
+                (icd::MotorPhaseCurrents, |_: ()| {
+                    let adc = cx.local.adc.take().unwrap().start_conversion();
+
+                    let adc = adc.wait_for_conversion_sequence().unwrap_active();
+                    let current_a_mv = adc.sample_to_millivolts(adc.current_sample());
+                    let adc = adc.wait_for_conversion_sequence().unwrap_stopped();
+                    let current_b_mv = adc.sample_to_millivolts(adc.current_sample());
+
+                    *cx.local.adc = Some(adc);
+
+                    [current_a_mv, current_b_mv]
                 })
             }
         };
