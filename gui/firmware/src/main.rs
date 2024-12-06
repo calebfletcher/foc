@@ -19,7 +19,7 @@ mod app {
     use rtt_target::{rtt_init, ChannelMode};
     use stm32g4xx_hal::{
         adc::{
-            config::{AdcConfig, SampleTime},
+            config::{Continuous, SampleTime, Sequence},
             Adc, AdcClaim, ClockSource, Configured,
         },
         cordic::{
@@ -31,9 +31,8 @@ mod app {
         },
         delay::SYSTDelayExt as _,
         gpio::{
-            gpioa::{PA0, PA1},
             gpioc::{PC10, PC11, PC12, PC15, PC9},
-            Alternate, Analog, GpioExt as _, Output, PushPull, AF6,
+            Alternate, GpioExt as _, Output, PushPull, AF6,
         },
         prelude::OutputPin as _,
         pwr::PwrExt as _,
@@ -66,9 +65,7 @@ mod app {
         timer_handler: CountDownTimer<stm32g4xx_hal::stm32::TIM2>,
         cordic: DynamicCordic,
         encoder: AS5048A<EncoderSpi, PC9<Output<PushPull>>>,
-        motor_current_a: PA0<Analog>,
-        motor_current_b: PA1<Analog>,
-        adc: Adc<ADC1, Configured>,
+        adc: Option<Adc<ADC1, Configured>>,
     }
 
     #[init]
@@ -131,16 +128,22 @@ mod app {
 
         let encoder = AS5048A::new(spi, cs0);
 
-        let mut delay = cx.core.SYST.delay(&rcc.clocks);
-        let adc = cx.device.ADC1.claim_and_configure(
-            ClockSource::SystemClock,
-            &rcc,
-            AdcConfig::default(),
-            &mut delay,
-            false,
-        );
+        // These don't implement drop, so it should be fine to drop them but
+        // still use the ADC
         let motor_current_a = gpioa.pa0.into_analog();
         let motor_current_b = gpioa.pa1.into_analog();
+
+        let mut delay = cx.core.SYST.delay(&rcc.clocks);
+        let mut adc = cx
+            .device
+            .ADC1
+            .claim(ClockSource::SystemClock, &rcc, &mut delay, false);
+
+        adc.set_continuous(Continuous::Single);
+        adc.reset_sequence();
+        adc.configure_channel(&motor_current_a, Sequence::One, SampleTime::Cycles_640_5);
+        adc.configure_channel(&motor_current_b, Sequence::Two, SampleTime::Cycles_640_5);
+        let adc = adc.enable();
 
         let led = gpioc.pc15.into_push_pull_output();
 
@@ -159,9 +162,7 @@ mod app {
                 timer_handler: timer2,
                 cordic,
                 encoder,
-                adc,
-                motor_current_a,
-                motor_current_b,
+                adc: Some(adc),
             },
         )
     }
@@ -178,7 +179,7 @@ mod app {
         cx.local.timer_handler.clear_interrupt(Event::TimeOut);
     }
 
-    #[task(local = [rpc_channel, cordic, encoder, adc, motor_current_a, motor_current_b])]
+    #[task(local = [rpc_channel, cordic, encoder, adc])]
     async fn rtt_rpc(cx: rtt_rpc::Context) {
         let mut rx_buffer_raw = [0; 64];
         let mut rx_buffer_frame = [0; 64];
@@ -212,10 +213,15 @@ mod app {
                     cx.local.encoder.angle().unwrap()
                 })
                 (icd::MotorPhaseCurrents, |_: ()| {
-                    let current_a_raw = cx.local.adc.convert(cx.local.motor_current_a, SampleTime::Cycles_640_5);
-                    let current_a_mv = cx.local.adc.sample_to_millivolts(current_a_raw);
-                    let current_b_raw = cx.local.adc.convert(cx.local.motor_current_b, SampleTime::Cycles_640_5);
-                    let current_b_mv = cx.local.adc.sample_to_millivolts(current_b_raw);
+                    let adc = cx.local.adc.take().unwrap().start_conversion();
+
+                    let adc = adc.wait_for_conversion_sequence().unwrap_active();
+                    let current_a_mv = adc.sample_to_millivolts(adc.current_sample());
+                    let adc = adc.wait_for_conversion_sequence().unwrap_stopped();
+                    let current_b_mv = adc.sample_to_millivolts(adc.current_sample());
+
+                    *cx.local.adc = Some(adc);
+
                     [current_a_mv, current_b_mv]
                 })
             }
