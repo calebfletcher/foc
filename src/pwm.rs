@@ -13,12 +13,12 @@ pub trait Modulation {
 
     /// Module the value, returning the result as a value between 0 and the specified
     /// maximum value inclusive.
-    fn as_compare_value<const MAX: u16>(value: TwoPhaseReferenceFrame) -> [u16; 3] {
+    fn as_compare_value(value: TwoPhaseReferenceFrame, max: u16) -> [u16; 3] {
         Self::modulate(value).map(|val| {
-            (((val + I16F16::from_num(1)) * (MAX as i32 + 1)) / 2)
+            (((val + I16F16::from_num(1)) * (max as i32 + 1)) / 2)
                 .round()
                 .saturating_to_num::<u16>()
-                .clamp(0, MAX)
+                .clamp(0, max)
         })
     }
 }

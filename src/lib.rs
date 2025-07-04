@@ -18,22 +18,25 @@ const SQRT_3: I16F16 = I16F16::lit("1.7320508");
 /// If this controller does not match the exact setup that you desire, then all
 /// of the underlying algorithms are available to use instead (see the
 /// [`park_clarke`], [`pwm`], and [`pid`] modules).
-pub struct Foc<Modulator: pwm::Modulation, const PWM_RESOLUTION: u16> {
+pub struct Foc<Modulator: pwm::Modulation> {
     flux_current_controller: pid::PIController,
     torque_current_controller: pid::PIController,
+    max_pwm_duty: u16,
     _phantom: PhantomData<Modulator>,
 }
 
-impl<Modulator: pwm::Modulation, const PWM_RESOLUTION: u16> Foc<Modulator, PWM_RESOLUTION> {
+impl<Modulator: pwm::Modulation> Foc<Modulator> {
     /// Create a new FOC controller with the desired PI controllers for the flux
     /// and torque components.
     pub fn new(
         flux_current_controller: pid::PIController,
         torque_current_controller: pid::PIController,
+        max_pwm_duty: u16,
     ) -> Self {
         Self {
             flux_current_controller,
             torque_current_controller,
+            max_pwm_duty,
             _phantom: PhantomData,
         }
     }
@@ -83,6 +86,6 @@ impl<Modulator: pwm::Modulation, const PWM_RESOLUTION: u16> Foc<Modulator, PWM_R
         );
 
         // Modulate the result to PWM values
-        Modulator::as_compare_value::<PWM_RESOLUTION>(orthogonal_voltage)
+        Modulator::as_compare_value(orthogonal_voltage, self.max_pwm_duty)
     }
 }
