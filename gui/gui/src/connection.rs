@@ -60,6 +60,10 @@ impl Device {
     pub fn encoder_angle(&mut self) -> Result<u16, anyhow::Error> {
         self.rpc_channel.call::<icd::EncoderAngle>(())
     }
+
+    pub fn motor_currents(&mut self) -> Result<[u16; 2], anyhow::Error> {
+        self.rpc_channel.call::<icd::MotorPhaseCurrents>(())
+    }
 }
 
 struct RpcChannel {
